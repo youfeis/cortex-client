@@ -42,6 +42,7 @@ void main() {
     expect(find.byTooltip('Camera or photo library'), findsOneWidget);
     await tester.pumpAndSettle();
     await waitFor(find.textContaining('Resets '));
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('chat');
     await tester.enterText(
       find.byType(TextField),

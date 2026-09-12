@@ -9,6 +9,27 @@ Entry weight(String id, String date, double kg) =>
 
 void main() {
   test(
+    'Latest same-day weight follows record time rather than identifier order',
+    () {
+      final points = healthPoints([
+        Entry.fromJson({
+          'id': 'z-old',
+          'kind': 'weight',
+          'data': {'date': '2026-05-20', 'kg': 93},
+          'updated': '2026-05-20T08:00:00Z',
+        }),
+        Entry.fromJson({
+          'id': 'a-new',
+          'kind': 'weight',
+          'data': {'date': '2026-05-20', 'kg': 92},
+          'updated': '2026-05-20T10:00:00Z',
+        }),
+      ], TrendMetric.weight);
+      expect(points.single.id, 'a-new');
+    },
+  );
+
+  test(
     'Date ranges use calendar days, exclude future readings, and keep sparse averages honest',
     () {
       final points = healthPoints([

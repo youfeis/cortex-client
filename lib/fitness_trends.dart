@@ -13,6 +13,7 @@ enum TrendMetric { weight, glucose, bp }
 class HealthPoint {
   final String id, date, context;
   final DateTime at;
+  final DateTime? updated;
   final double value;
   final double? second;
   const HealthPoint(
@@ -22,6 +23,7 @@ class HealthPoint {
     this.value, {
     this.second,
     this.context = '',
+    this.updated,
   });
 }
 
@@ -68,12 +70,18 @@ List<HealthPoint> healthPoints(List<Entry> records, TrendMetric metric) {
         raw.toDouble(),
         second: metric == TrendMetric.bp ? (lower as num).toDouble() : null,
         context: d['context']?.toString() ?? 'unspecified',
+        updated: entry.updated,
       ),
     );
   }
   result.sort((a, b) {
     final order = a.at.compareTo(b.at);
-    return order == 0 ? a.id.compareTo(b.id) : order;
+    if (order != 0) return order;
+    // An undated-time reading uses record order, never a random ID, as a tie-break.
+    final updatedOrder = (a.updated ?? DateTime.utc(1970)).compareTo(
+      b.updated ?? DateTime.utc(1970),
+    );
+    return updatedOrder == 0 ? a.id.compareTo(b.id) : updatedOrder;
   });
   if (metric == TrendMetric.weight) {
     final byDate = <String, HealthPoint>{};
@@ -101,15 +109,20 @@ List<HealthPoint> pointsInRange(
 }
 
 // Calendar days, not the last seven measurements. Missing days are not zeroes.
-double recentWeightAverage(List<HealthPoint> points) {
-  if (points.isEmpty) return 0;
+List<HealthPoint> recentWeightWindow(List<HealthPoint> points) {
+  if (points.isEmpty) return [];
   final last = DateTime.parse(points.last.date);
   final from = DateTime.utc(
     last.year,
     last.month,
     last.day,
   ).subtract(const Duration(days: 6));
-  final recent = points.where((p) => !p.at.isBefore(from)).toList();
+  return points.where((p) => !p.at.isBefore(from)).toList();
+}
+
+double recentWeightAverage(List<HealthPoint> points) {
+  final recent = recentWeightWindow(points);
+  if (recent.isEmpty) return 0;
   return recent.fold<double>(0, (sum, p) => sum + p.value) / recent.length;
 }
 
@@ -189,7 +202,7 @@ class _FitnessTrendsState extends State<FitnessTrends> {
           target: goal is num ? goal.toDouble() : null,
           summary: weight.isEmpty
               ? null
-              : '${recentWeightAverage(weight).toStringAsFixed(1)} kg · 7-day average ending ${shortDate(weight.last.date)}',
+              : '${recentWeightAverage(weight).toStringAsFixed(1)} kg · 7-day average from ${recentWeightWindow(weight).length} weigh-in${recentWeightWindow(weight).length == 1 ? '' : 's'}, ending ${shortDate(weight.last.date)}',
           empty: 'No weight readings in this period.',
         ),
         const SizedBox(height: 18),

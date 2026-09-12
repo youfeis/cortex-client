@@ -129,11 +129,13 @@ class Entry {
   final String id;
   final String kind;
   final Map<String, dynamic> data;
-  Entry(this.id, this.kind, this.data);
+  final DateTime? updated;
+  Entry(this.id, this.kind, this.data, {this.updated});
   factory Entry.fromJson(Map<String, dynamic> json) => Entry(
     json['id'] as String,
     json['kind'] as String,
     Map<String, dynamic>.from(json['data'] as Map),
+    updated: DateTime.tryParse(json['updated']?.toString() ?? ''),
   );
 }
 

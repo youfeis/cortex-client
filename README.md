@@ -1,5 +1,80 @@
-# Cortex client
+# External Prefrontal Cortex
 
-External Prefrontal Cortex: personal time and fitness management.
+An iPhone-first Flutter client for the private Cortex personal manager.
 
-Work on `dev`. Production builds come from `main`.
+Two tabs: **Chat** and **My space**. Chat is one continuous main conversation,
+with photos, steering, stop, context usage, and in-app Codex login. My space
+shows fitness and time-management progress. Most record changes happen through
+chat. Money and personal targets are placeholders.
+
+## Run
+
+```sh
+flutter pub get --enforce-lockfile
+flutter run
+```
+
+The app connects to `https://cortex.miaotutu.com`. Pair it with a one-use code
+generated on the server (`docker compose exec -T api cortex pair`). Each iPhone
+creates its own P-256 Secure Enclave key. The private key stays on the phone.
+The simulator uses its own Keychain key. No app-wide secret or user health
+record is bundled in source or builds.
+
+The server keeps the owner-to-main-session relationship and long-term memory
+in MongoDB. Remaining context is an estimate from Codex's latest usage report;
+unknown values remain unknown. Saved memories survive context compaction.
+
+## iPhone features
+
+- Camera and photo library attachments (up to four photos per message).
+- Apple Health import: today's shared steps, active energy, weight, and BP.
+- Calendar import: next seven days from calendars enabled on the phone.
+- Google calendars can be included through the iPhone Calendar account setup.
+- Health and calendar access are requested only when the owner taps Import.
+- Imports are manual and read-only. This version does not write to Google
+  Calendar, set alarms, or run background notifications.
+
+Meals require the owner to review photo estimates through chat. Fitness data
+is real server data; an empty log is not treated as a complete food diary.
+Apple Health active energy is shown separately from manual exercise to avoid
+adding a second copy of the same workout into the TDEE estimate.
+
+## Branches and builds
+
+Develop on `dev`; merge a reviewed PR into `main`. Dev/PR run analysis and widget
+tests. Main builds an unsigned iPhone release and an Apple Silicon simulator
+app. Download them from the GitHub Actions artifact. **The unsigned build is
+not directly installable on a physical iPhone.**
+
+For a signed local iPhone installation using this Mac's configured Apple team:
+
+```sh
+scripts/install-iphone.sh DEVICE_IDENTIFIER
+```
+
+The script uses a release build so the app can launch without an attached
+Flutter debugger. TestFlight automation still needs App Store Connect app/signing
+setup; no TestFlight upload or App Store publication is configured.
+
+## Validate
+
+```sh
+flutter analyze
+flutter test
+flutter build ios --simulator --debug
+flutter build ios --release
+```
+
+Optional native integration check against production (use a dedicated test
+pairing code; never commit it):
+
+```sh
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/app_test.dart -d SIMULATOR_ID \
+  --dart-define-from-file=PRIVATE_PAIRING_JSON
+```
+
+The private JSON contains `CORTEX_PAIR_CODE`. The integration check pairs the
+simulator, verifies private data screens and draft retention, and writes
+screenshots to ignored `build/screenshots/`. It does not send a chat message,
+modify the owner's records, or sign in to an OpenAI account.

@@ -719,6 +719,8 @@ class _LoginSheetState extends State<LoginSheet> {
   String? error;
   Timer? timer;
   bool done = false;
+  bool starting = false;
+  int attempt = 0;
   @override
   void initState() {
     super.initState();
@@ -726,10 +728,29 @@ class _LoginSheetState extends State<LoginSheet> {
   }
 
   Future<void> start() async {
+    if (starting) return;
+    final generation = ++attempt;
+    final previous = login?['loginId'];
+    timer?.cancel();
+    setState(() {
+      starting = true;
+      error = null;
+      login = null;
+    });
     try {
+      if (previous != null) {
+        await widget.model.api
+            .call('POST', '/v1/account/cancel', {'loginId': previous})
+            .catchError((_) => null);
+      }
       final value =
           await widget.model.api.call('POST', '/v1/account/login') as Map;
-      if (!mounted) {
+      if (!mounted || generation != attempt) {
+        if (value['loginId'] != null) {
+          await widget.model.api
+              .call('POST', '/v1/account/cancel', {'loginId': value['loginId']})
+              .catchError((_) => null);
+        }
         return;
       }
       setState(() => login = Map<String, dynamic>.from(value));
@@ -738,6 +759,8 @@ class _LoginSheetState extends State<LoginSheet> {
       if (mounted) {
         setState(() => error = e.toString());
       }
+    } finally {
+      if (mounted && generation == attempt) setState(() => starting = false);
     }
   }
 
@@ -753,6 +776,7 @@ class _LoginSheetState extends State<LoginSheet> {
 
   @override
   void dispose() {
+    attempt++;
     timer?.cancel();
     if (!done && login?['loginId'] != null) {
       widget.model.api
@@ -784,6 +808,33 @@ class _LoginSheetState extends State<LoginSheet> {
             ],
           ),
           const SizedBox(height: 16),
+          if (!done) ...[
+            Panel(
+              color: soft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'One-time ChatGPT setup',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  caption(
+                    'In ChatGPT, open Settings → Security and enable “Device code authorization for Codex”. Then return here and get a new code.',
+                  ),
+                  TextButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://chatgpt.com/#settings/Security'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open ChatGPT settings'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (done) ...[
             caption('You can return to your conversation now.'),
             const SizedBox(height: 20),
@@ -854,6 +905,17 @@ class _LoginSheetState extends State<LoginSheet> {
             const SizedBox(height: 12),
             caption(
               'Waiting for login… Your login stays on your private server.',
+            ),
+          ],
+          if (!done && !starting) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: start,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Get a new login code'),
+            ),
+            caption(
+              'If OpenAI says device-code login is disabled, enable the setting above first. A fresh code replaces the previous one.',
             ),
           ],
           const SizedBox(height: 18),

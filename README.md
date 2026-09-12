@@ -161,3 +161,7 @@ through signed image requests, with its ID in the private owner-avatar memory
 record. No personal picture is committed or bundled. The initial picture came
 from the owner's Mac account image; iOS has no direct Apple Account avatar API,
 so it is not claimed to be a live iCloud-photo sync.
+
+Medical routines with `intervalWeeks` and `anchorDate` show their repeat interval
+and next due date. Daily routines retain their existing labels. Retired routines
+are hidden from both Fitness and Time management.

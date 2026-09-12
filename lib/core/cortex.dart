@@ -1,3 +1,5 @@
+import 'phone_alarms.dart';
+import 'memory_notices.dart';
 import '../remote_ui/layout_store.dart';
 import 'managed_client.dart';
 import 'dart:async';
@@ -152,6 +154,13 @@ class Entry {
 class CortexModel extends ChangeNotifier {
   final CortexApi api;
   bool _disposed = false;
+  final memoryNotices = MemoryNotices();
+  late final alarms = PhoneAlarms(
+    api: api,
+    changed: notifyListeners,
+    canSync: () => !_disposed && paired && foreground,
+  );
+  Timer? _alarmTimer;
   @override
   void notifyListeners() {
     if (!_disposed) {
@@ -243,6 +252,7 @@ class CortexModel extends ChangeNotifier {
     refreshing = true;
     try {
       final value = await api.call('GET', '/v1/snapshot') as Map;
+      await memoryNotices.receive(value['records'] as List);
       entries = (value['records'] as List)
           .map((e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
@@ -324,6 +334,9 @@ class CortexModel extends ChangeNotifier {
 
   void startServices() {
     native.setMethodCallHandler((call) async {
+      if (call.method == 'alarmsChanged') {
+        unawaited(alarms.sync());
+      }
       if (call.method == 'healthChanged' &&
           foreground &&
           paired &&
@@ -332,6 +345,16 @@ class CortexModel extends ChangeNotifier {
         _healthDebounce = Timer(const Duration(seconds: 2), () => syncHealth());
       }
     });
+    _alarmTimer?.cancel();
+    _alarmTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (busy ||
+          alarms.checked == null ||
+          DateTime.now().difference(alarms.checked!) >
+              const Duration(seconds: 30)) {
+        unawaited(alarms.sync());
+      }
+    });
+    unawaited(alarms.sync());
     _servicesTimer?.cancel();
     _servicesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (foreground && paired) {
@@ -351,6 +374,7 @@ class CortexModel extends ChangeNotifier {
   void setForeground(bool active) {
     foreground = active;
     if (active && paired) {
+      unawaited(alarms.sync());
       unawaited(refresh().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));
       unawaited(syncCalendars(refreshSources: true));
@@ -593,6 +617,8 @@ class CortexModel extends ChangeNotifier {
     _refreshTimer?.cancel();
     _servicesTimer?.cancel();
     _healthDebounce?.cancel();
+    _alarmTimer?.cancel();
+    alarms.dispose();
     api.close();
     super.dispose();
   }

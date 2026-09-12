@@ -17,6 +17,7 @@ import HealthKit
     let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CortexNative")!
     let channel = FlutterMethodChannel(name: "com.miaotutu.cortex/native", binaryMessenger: registrar.messenger())
     CortexNative.healthChanged = { channel.invokeMethod("healthChanged", arguments: nil) }
+    if #available(iOS 26.0, *) { CortexAlarms.changed = { channel.invokeMethod("alarmsChanged", arguments: nil) } }
     channel.setMethodCallHandler { call, result in
       switch call.method {
       case "publicKey", "sign":
@@ -38,6 +39,9 @@ import HealthKit
             DispatchQueue.main.async { result(FlutterError(code: "device_key", message: error.localizedDescription, details: nil)) }
           }
         }
+      case "alarmStatus", "alarmPermission", "alarmApply":
+        if #available(iOS 26.0, *) { CortexAlarms.handle(call.method, call.arguments as? [String: Any] ?? [:], result) }
+        else { result(["permission": "unavailable", "scheduledIds": [], "status": "failed", "error": "Alarms require iOS 26 or later."]) }
       case "readHealth": CortexNative.readHealth(call.arguments as? [String: Any] ?? [:], result)
       case "calendarTimeZone": result(TimeZone.current.identifier)
       case "openAppSettings":

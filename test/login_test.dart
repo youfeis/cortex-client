@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cortex/cortex.dart';
-import 'package:cortex/screens.dart';
+import 'package:cortex/core/cortex.dart';
+import 'package:cortex/features/settings/codex_login.dart';
 
 class LoginApi extends CortexApi {
   final calls = <String>[];

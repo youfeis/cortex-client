@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cortex/cortex.dart';
-import 'package:cortex/screens.dart';
-import 'package:cortex/ui.dart';
+import 'package:cortex/core/cortex.dart';
+import 'package:cortex/app/shell.dart';
+import 'package:cortex/app/ui.dart';
 
 class FakeModel extends CortexModel {
   bool steered = false;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'cortex.dart';
-import 'main.dart';
-import 'quota.dart';
+import '../core/cortex.dart';
+import '../main.dart';
+import '../core/quota.dart';
 import 'ui.dart';
 
 String chatStatus(CortexModel model) {

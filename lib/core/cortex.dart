@@ -1,7 +1,11 @@
+import '../remote_ui/layout_store.dart';
+import 'managed_client.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -27,7 +31,13 @@ class ApiException implements Exception {
 
 class CortexApi {
   static const origin = 'https://cortex.miaotutu.com';
-  final http.Client _http = http.Client();
+  final http.Client _http = ManagedClient(
+    Platform.isIOS
+        ? CupertinoClient.fromSessionConfiguration(
+            URLSessionConfiguration.ephemeralSessionConfiguration(),
+          )
+        : http.Client(),
+  );
   String? _publicKey;
   Future<String> publicKey() async =>
       _publicKey ??= (await native.invokeMethod<String>('publicKey'))!;
@@ -306,6 +316,13 @@ class CortexModel extends ChangeNotifier {
 
   void startServices() {
     native.setMethodCallHandler((call) async {
+      if (call.method == 'healthChanged' &&
+          foreground &&
+          paired &&
+          !_disposed) {
+        _healthDebounce?.cancel();
+        _healthDebounce = Timer(const Duration(seconds: 2), () => syncHealth());
+      }
       if (call.method == 'calendarsChanged' &&
           foreground &&
           paired &&
@@ -322,9 +339,15 @@ class CortexModel extends ChangeNotifier {
       if (foreground && paired) {
         unawaited(readAccount().catchError((_) {}));
         unawaited(syncCalendars());
+        unawaited(layouts.refresh(this));
+        unawaited(syncHealth());
+        unawaited(readGoogleAccounts());
       }
     });
     unawaited(syncCalendars(refreshSources: true));
+    unawaited(layouts.refresh(this));
+    unawaited(syncHealth());
+    unawaited(readGoogleAccounts());
   }
 
   void setForeground(bool active) {
@@ -335,6 +358,9 @@ class CortexModel extends ChangeNotifier {
       unawaited(refresh().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));
       unawaited(syncCalendars(refreshSources: true));
+      unawaited(layouts.refresh(this));
+      unawaited(syncHealth());
+      unawaited(readGoogleAccounts());
     }
   }
 
@@ -435,56 +461,80 @@ class CortexModel extends ChangeNotifier {
     }();
   }
 
-  Future<String> importHealth() async {
-    final values = Map<String, dynamic>.from(
-      await native.invokeMethod('readHealth') as Map,
-    );
-    final today = day();
-    var count = 0;
-    Future<void> add(String kind, Map<String, dynamic> data) async {
-      await save(
-        kind,
-        {...data, 'date': today, 'source': 'appleHealth'},
-        id: 'health-$kind-$today',
-        reload: false,
-      );
-      count++;
+  List<Map<String, dynamic>> googleAccounts = [];
+  String? googleError;
+  bool _googleLoading = false;
+  Future<void> readGoogleAccounts() async {
+    if (_disposed || !paired || _googleLoading) return;
+    _googleLoading = true;
+    try {
+      final response = await api.call('GET', '/v1/google/accounts') as Map;
+      googleAccounts = (response['accounts'] as List)
+          .map((v) => Map<String, dynamic>.from(v as Map))
+          .toList();
+      googleError = response['configured'] == true
+          ? null
+          : 'Google connection setup is still being completed.';
+    } catch (_) {
+      googleError = 'Could not check Google accounts. Will retry.';
+    } finally {
+      _googleLoading = false;
+      notifyListeners();
     }
+  }
 
-    if (values['steps'] != null) {
-      await add('steps', {'count': (values['steps'] as num).round()});
-    }
-    if (values['kg'] != null) {
-      await add('weight', {'kg': values['kg']});
-    }
-    if (values['systolic'] != null && values['diastolic'] != null) {
-      await add('bp', {
-        'systolic': (values['systolic'] as num).round(),
-        'diastolic': (values['diastolic'] as num).round(),
-      });
-    }
-    if (values['glucose'] is Map) {
-      final glucose = Map<String, dynamic>.from(values['glucose'] as Map);
-      final sampleID = glucose.remove('sampleId') as String;
-      await save(
-        'glucose',
-        {...glucose, 'date': today, 'source': 'appleHealth'},
-        id: 'health-glucose-$sampleID',
-        reload: false,
+  String healthPermission = 'checking';
+  String? healthError;
+  DateTime? healthSyncedAt;
+  bool healthSyncing = false, healthHasData = false;
+  Timer? _healthDebounce;
+  String? _healthFingerprint;
+
+  Future<String> importHealth() async {
+    await syncHealth(requestAccess: true);
+    return healthError ??
+        (healthHasData
+            ? 'Apple Health updates automatically.'
+            : 'Access requested. Only the data you share can appear here.');
+  }
+
+  Future<void> syncHealth({bool requestAccess = false}) async {
+    if (_disposed || !paired || healthSyncing) return;
+    healthSyncing = true;
+    notifyListeners();
+    try {
+      final value = Map<String, dynamic>.from(
+        await native.invokeMethod('readHealth', {
+              'requestAccess': requestAccess,
+            })
+            as Map,
       );
-      count++;
+      healthPermission = value['permission'] as String? ?? 'setupNeeded';
+      final rows =
+          (value['records'] as List? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList()
+            ..sort((a, b) => (a['id'] as String).compareTo(b['id'] as String));
+      healthHasData = rows.isNotEmpty;
+      healthError = value['partial'] == true
+          ? 'Some Health readings are unavailable. Sync will retry.'
+          : null;
+      final fingerprint = jsonEncode(rows);
+      if (rows.isNotEmpty && fingerprint != _healthFingerprint) {
+        await api.call('POST', '/v1/health/sync', {'records': rows});
+        _healthFingerprint = fingerprint;
+        await refresh();
+      }
+      if (healthPermission == 'requested' && value['partial'] != true) {
+        healthSyncedAt = DateTime.now();
+      }
+    } catch (_) {
+      healthError =
+          'Health sync will retry. Unlock your iPhone and check Health access.';
+    } finally {
+      healthSyncing = false;
+      notifyListeners();
     }
-    if (values['activeKcal'] != null) {
-      await add('activity', {
-        'title': 'Apple Health active energy',
-        'minutes': 0,
-        'kcal': (values['activeKcal'] as num).round(),
-      });
-    }
-    await refresh();
-    return count == 0
-        ? 'No shared Health data for today. Check Health permissions or enter it manually.'
-        : 'Today’s available Health data is updated.';
   }
 
   Future<void> chooseCalendars(Set<String> ids) async {
@@ -580,6 +630,7 @@ class CortexModel extends ChangeNotifier {
     _refreshTimer?.cancel();
     _servicesTimer?.cancel();
     _calendarDebounce?.cancel();
+    _healthDebounce?.cancel();
     api.close();
     super.dispose();
   }

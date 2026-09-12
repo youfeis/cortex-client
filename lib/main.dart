@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'cortex.dart';
-import 'screens.dart';
-import 'ui.dart';
+import 'core/cortex.dart';
+import 'app/shell.dart';
+import 'features/settings/pair_screen.dart';
+import 'app/ui.dart';
 
 const ink = Color(0xFF2D4135);
 const muted = Color(0xFF74816C);

@@ -20,6 +20,7 @@ import EventKit
     CortexNative.calendarObserver = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: CortexNative.calendar, queue: .main) { _ in
       channel.invokeMethod("calendarsChanged", arguments: nil)
     }
+    CortexNative.healthChanged = { channel.invokeMethod("healthChanged", arguments: nil) }
     channel.setMethodCallHandler { call, result in
       switch call.method {
       case "publicKey", "sign":
@@ -41,7 +42,7 @@ import EventKit
             DispatchQueue.main.async { result(FlutterError(code: "device_key", message: error.localizedDescription, details: nil)) }
           }
         }
-      case "readHealth": CortexNative.readHealth(result)
+      case "readHealth": CortexNative.readHealth(call.arguments as? [String: Any] ?? [:], result)
       case "readCalendarSnapshot": CortexNative.readCalendarSnapshot(call.arguments as? [String: Any] ?? [:], result)
       case "openAppSettings":
         UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) { result($0) }
@@ -76,63 +77,108 @@ enum CortexNative {
     return key
   }
 
-  static func readHealth(_ result: @escaping FlutterResult) {
-    guard HKHealthStore.isHealthDataAvailable() else { result(FlutterError(code: "health", message: "Health data is unavailable on this device.", details: nil)); return }
-    let identifiers: [HKQuantityTypeIdentifier] = [.stepCount, .activeEnergyBurned, .bodyMass, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodGlucose]
-    let types = Set(identifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
-    health.requestAuthorization(toShare: [], read: types) { granted, error in
-      guard granted, error == nil else { DispatchQueue.main.async { result(FlutterError(code: "health", message: "Health access was not completed. You can still enter records manually.", details: nil)) }; return }
-      let start = Calendar.current.startOfDay(for: Date())
-      let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
-      let group = DispatchGroup()
-      let lock = NSLock()
-      var values: [String: Any] = [:]
-      for (id, name, unit) in [(HKQuantityTypeIdentifier.stepCount, "steps", HKUnit.count()), (.activeEnergyBurned, "activeKcal", HKUnit.kilocalorie())] {
-        guard let type = HKObjectType.quantityType(forIdentifier: id) else { continue }
-        group.enter()
-        health.execute(HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, _ in
-          if let value = statistics?.sumQuantity()?.doubleValue(for: unit) { lock.lock(); values[name] = value; lock.unlock() }
-          group.leave()
-        })
+  static var healthObservers: [HKObserverQuery] = []
+  static var healthChanged: (() -> Void)?
+  static let healthIdentifiers: [HKQuantityTypeIdentifier] = [.stepCount, .activeEnergyBurned, .bodyMass, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodGlucose]
+  static var healthTypes: Set<HKObjectType> { Set(healthIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) }) }
+
+  static func observeHealth() {
+    guard healthObservers.isEmpty else { return }
+    for type in healthTypes {
+      guard let sampleType = type as? HKSampleType else { continue }
+      let observer = HKObserverQuery(sampleType: sampleType, predicate: nil) { _, completion, error in
+        if error == nil { DispatchQueue.main.async { healthChanged?() } }
+        completion()
       }
-      for (id, name, unit) in [(HKQuantityTypeIdentifier.bodyMass, "kg", HKUnit.gramUnit(with: .kilo))] {
-        guard let type = HKObjectType.quantityType(forIdentifier: id) else { continue }
-        group.enter()
-        health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
-          if let sample = samples?.first as? HKQuantitySample { lock.lock(); values[name] = sample.quantity.doubleValue(for: unit); lock.unlock() }
-          group.leave()
-        })
+      healthObservers.append(observer)
+      health.execute(observer)
+    }
+  }
+
+  static func readHealth(_ args: [String: Any], _ result: @escaping FlutterResult) {
+    guard HKHealthStore.isHealthDataAvailable() else { result(["permission": "unavailable", "records": []]); return }
+    health.getRequestStatusForAuthorization(toShare: [], read: healthTypes) { status, error in
+      guard error == nil else { DispatchQueue.main.async { result(FlutterError(code: "health", message: "Health is unavailable. Unlock your iPhone and try again.", details: nil)) }; return }
+      if args["requestAccess"] as? Bool == true {
+        health.requestAuthorization(toShare: [], read: healthTypes) { completed, error in
+          guard completed, error == nil else { DispatchQueue.main.async { result(FlutterError(code: "health", message: "Health access setup was not completed.", details: nil)) }; return }
+          readHealthSamples(result)
+        }
+      } else if status == .shouldRequest {
+        DispatchQueue.main.async { result(["permission": "setupNeeded", "records": []]) }
+      } else {
+        readHealthSamples(result)
       }
-      if let type = HKObjectType.correlationType(forIdentifier: .bloodPressure) {
-        group.enter()
-        health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
-          if let reading = samples?.first as? HKCorrelation,
-             let systolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic),
-             let diastolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic),
-             let systolic = reading.objects(for: systolicType).first as? HKQuantitySample,
-             let diastolic = reading.objects(for: diastolicType).first as? HKQuantitySample {
-            lock.lock()
-            values["systolic"] = systolic.quantity.doubleValue(for: .millimeterOfMercury())
-            values["diastolic"] = diastolic.quantity.doubleValue(for: .millimeterOfMercury())
-            lock.unlock()
-          }
-          group.leave()
-        })
+    }
+  }
+
+  static func readHealthSamples(_ result: @escaping FlutterResult) {
+    observeHealth()
+    let cal = Calendar.current
+    let today = cal.startOfDay(for: Date())
+    let historyStart = cal.date(byAdding: .day, value: -90, to: today)!
+    let predicate = HKQuery.predicateForSamples(withStart: historyStart, end: Date(), options: .strictStartDate)
+    let group = DispatchGroup(), lock = NSLock()
+    var rows: [[String: Any]] = []
+    var failed = false
+    func add(_ kind: String, _ id: String, _ date: Date, _ data: [String: Any], timed: Bool = true) {
+      let formatter = DateFormatter(); formatter.calendar = cal; formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX")
+      var fields = data; fields["date"] = formatter.string(from: date); fields["source"] = "appleHealth"
+      if timed { fields["recordedAt"] = ISO8601DateFormatter().string(from: date) }
+      lock.lock(); rows.append(["id": "health-\(kind)-\(id)", "kind": kind, "data": fields]); lock.unlock()
+    }
+    // Statistics combine overlapping phone/watch sources using HealthKit's aggregation.
+    for (id, kind, unit) in [(HKQuantityTypeIdentifier.stepCount, "steps", HKUnit.count()), (.activeEnergyBurned, "activity", HKUnit.kilocalorie())] {
+      let type = HKObjectType.quantityType(forIdentifier: id)!
+      let start = cal.date(byAdding: .day, value: -7, to: today)!
+      group.enter()
+      let query = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: Date()), options: .cumulativeSum, anchorDate: today, intervalComponents: DateComponents(day: 1))
+      query.initialResultsHandler = { _, results, error in
+        if error != nil { lock.lock(); failed = true; lock.unlock() }
+        results?.enumerateStatistics(from: start, to: Date()) { statistics, _ in
+          guard let quantity = statistics.sumQuantity() else { return }
+          let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX")
+          let value = quantity.doubleValue(for: unit).rounded()
+          let fields: [String: Any] = kind == "steps" ? ["count": value] : ["title": "Apple Health active energy", "minutes": 0, "kcal": value]
+          add(kind, formatter.string(from: statistics.startDate), statistics.startDate, fields, timed: false)
+        }
+        group.leave()
       }
-      if let type = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
-        group.enter()
-        health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
-          if let sample = samples?.first as? HKQuantitySample {
+      health.execute(query)
+    }
+    for (identifier, kind, unit, field) in [(HKQuantityTypeIdentifier.bodyMass, "weight", HKUnit.gramUnit(with: .kilo), "kg"), (.bloodGlucose, "glucose", HKUnit(from: "mg/dL"), "mgdl")] {
+      let type = HKObjectType.quantityType(forIdentifier: identifier)!
+      group.enter()
+      health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+        if error != nil { lock.lock(); failed = true; lock.unlock() }
+        for sample in (samples as? [HKQuantitySample] ?? []) {
+          var fields: [String: Any] = [field: sample.quantity.doubleValue(for: unit)]
+          if kind == "glucose" {
             let meal = (sample.metadata?[HKMetadataKeyBloodGlucoseMealTime] as? NSNumber)?.intValue
-            // HealthKit before-meal metadata does not establish a fasting duration.
-            let context = meal == HKBloodGlucoseMealTime.preprandial.rawValue ? "beforeMeal" : meal == HKBloodGlucoseMealTime.postprandial.rawValue ? "afterMeal" : "unspecified"
-            let row: [String: Any] = ["mgdl": sample.quantity.doubleValue(for: HKUnit(from: "mg/dL")), "context": context, "sampleId": sample.uuid.uuidString.lowercased(), "recordedAt": ISO8601DateFormatter().string(from: sample.startDate)]
-            lock.lock(); values["glucose"] = row; lock.unlock()
+            fields["context"] = meal == HKBloodGlucoseMealTime.preprandial.rawValue ? "beforeMeal" : meal == HKBloodGlucoseMealTime.postprandial.rawValue ? "afterMeal" : "unspecified"
           }
-          group.leave()
-        })
-      }
-      group.notify(queue: .main) { result(values) }
+          add(kind, sample.uuid.uuidString.lowercased(), sample.startDate, fields)
+        }
+        group.leave()
+      })
+    }
+    if let type = HKObjectType.correlationType(forIdentifier: .bloodPressure) {
+      group.enter()
+      health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+        if error != nil { lock.lock(); failed = true; lock.unlock() }
+        for reading in (samples as? [HKCorrelation] ?? []) {
+          let st = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!, dt = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)!
+          if let sys = reading.objects(for: st).first as? HKQuantitySample, let dia = reading.objects(for: dt).first as? HKQuantitySample {
+            add("bp", reading.uuid.uuidString.lowercased(), reading.startDate, ["systolic": sys.quantity.doubleValue(for: .millimeterOfMercury()), "diastolic": dia.quantity.doubleValue(for: .millimeterOfMercury())])
+          }
+        }
+        group.leave()
+      })
+    }
+    group.notify(queue: .main) {
+      // iOS deliberately does not disclose per-type read permission. Empty results
+      // must never mean permission granted, or delete previously saved readings.
+      result(["permission": "requested", "records": rows, "partial": failed])
     }
   }
 

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cortex/app_header.dart';
-import 'package:cortex/cortex.dart';
-import 'package:cortex/quota.dart';
-import 'package:cortex/screens.dart';
+import 'package:cortex/app/usage_header.dart';
+import 'package:cortex/core/cortex.dart';
+import 'package:cortex/core/quota.dart';
+import 'package:cortex/app/shell.dart';
 
 Map<String, dynamic> limits() => {
   'rateLimitsByLimitId': {

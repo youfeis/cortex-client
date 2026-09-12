@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cortex/cortex.dart';
-import 'package:cortex/fitness_trends.dart';
-import 'package:cortex/space.dart';
+import 'package:cortex/core/cortex.dart';
+import 'package:cortex/features/fitness/trends.dart';
+import 'package:cortex/features/fitness/fitness_screen.dart';
 
 Entry weight(String id, String date, double kg) =>
     Entry(id, 'weight', {'date': date, 'kg': kg});

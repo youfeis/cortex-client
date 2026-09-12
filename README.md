@@ -113,3 +113,42 @@ The private JSON contains `CORTEX_PAIR_CODE`. The integration check pairs the
 simulator, verifies private data screens and draft retention, and writes
 screenshots to ignored `build/screenshots/`. It does not send a chat message,
 modify the owner's records, or sign in to an OpenAI account.
+
+
+## Native shell and remote layouts
+
+`lib/app/shell.dart` owns the two tabs. Features are grouped under `lib/features/`
+(chat, space, fitness, time, settings); networking and durable state are in
+`lib/core/`. `lib/remote_ui/` validates layout documents and compiles their
+allowlisted component trees into Flutter's `rfw` runtime. Chat controllers,
+streaming, steering/stop, file selection, permissions and signing remain native.
+The server can rearrange feature blocks, cards, chat/composer slots and message
+bubble presentation without reinstalling the app. New native capabilities still
+require an app update.
+
+The signed `/v1/ui` response is versioned and stored in MongoDB. Last validated UI
+is cached on the phone; the included release is the offline fallback. Unknown
+schemas/components, missing/duplicate controls and oversized documents are
+rejected. Layout activation waits until typing and a running reply finish.
+Checks run on opening/resuming the app and every three minutes while active.
+
+Edit the server's `internal/cortex/ui/release.json` and give it a new revision.
+Run `dart run tool/check_layout.dart ../server/internal/cortex/ui/release.json`
+from this repository, then merge the server change to main to publish it. The
+bundled copy only needs changing when preparing a new client release.
+
+## Automatic phone data
+
+Health reads run after setup, on launch/resume, once per minute while active, and
+when HealthKit reports a change. The last 90 days of weight, paired blood
+pressure and glucose are upserted by sample UUID. Daily activity covers today
+and the prior seven days; HealthKit combines phone/watch sources. No manual
+import is required. Empty or denied reads never erase saved measurements.
+Apple does not reveal per-type Health read authorization; “Access requested” is
+not a claim that every data type was granted. Change permissions in Apple Health.
+Background execution while iOS suspends the app is not implemented.
+
+Calendar permissions and selection remain native. EventKit refreshes the selected
+accounts automatically while active and on resume. Google Calendar linking in
+Settings additionally lets the server session edit real Google events through
+the official API. This does not change the phone's Apple Calendar account setup.

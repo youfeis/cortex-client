@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'cortex.dart';
-import 'main.dart';
-import 'quota.dart';
-import 'ui.dart';
+import '../../core/cortex.dart';
+import '../../main.dart';
+import '../../core/quota.dart';
+import '../../app/ui.dart';
 
 void openCalendars(BuildContext context, CortexModel model) => Navigator.push(
   context,
@@ -90,13 +90,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         caption(
                           'Last synced ${localDateTime(m.calendarSynced!)}',
                         ),
-                      TextButton.icon(
-                        onPressed: m.calendarSyncing
-                            ? null
-                            : () => m.syncCalendars(refreshSources: true),
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Refresh now'),
-                      ),
                     ],
                   ],
                 ),

@@ -1,0 +1,149 @@
+import 'google_accounts.dart';
+import '../fitness/health_access.dart';
+import 'package:flutter/material.dart';
+import '../../core/cortex.dart';
+import '../../app/ui.dart';
+import '../../core/quota.dart';
+import '../time/calendars.dart';
+
+import 'codex_login.dart';
+
+class SettingsScreen extends StatelessWidget {
+  final CortexModel model;
+  const SettingsScreen({super.key, required this.model});
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: model,
+    builder: (context, _) => Scaffold(
+      appBar: AppBar(title: const Text('Memory & settings')),
+      body: ListView(
+        padding: const EdgeInsets.all(22),
+        children: [
+          Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                label('YOUR PRIVATE CONNECTION'),
+                const SizedBox(height: 10),
+                const Text(
+                  'This device is paired',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 5),
+                caption(
+                  'cortex.miaotutu.com\nYour private signing key stays on this device.',
+                ),
+              ],
+            ),
+          ),
+          sectionHead('Codex account'),
+          Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  model.loggedIn ? 'Connected' : 'Login needed',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (model.account?['account'] is Map &&
+                    model.account!['account']['email'] != null)
+                  caption(model.account!['account']['email'] as String),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () => showLogin(context, model),
+                  child: Text(
+                    model.loggedIn ? 'Reconnect account' : 'Log in to Codex',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          sectionHead('Phone permissions'),
+          Panel(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: HealthAccess(model: model),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: const Text('Calendars'),
+                  subtitle: Text(
+                    model.calendarGranted
+                        ? 'Permission allowed · automatic sync'
+                        : 'Permission needed · tap to allow',
+                  ),
+                  onTap: () => openCalendars(context, model),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          caption(
+            'Enable both Google accounts in iPhone Calendar settings, then choose which calendars Cortex includes.',
+          ),
+          sectionHead('Google accounts'),
+          GoogleAccounts(model: model),
+          sectionHead('Saved memory'),
+          caption(
+            'Linked to you and your main conversation. Ask in chat to add, correct, or forget something.',
+          ),
+          const SizedBox(height: 12),
+          if (model.records('memory').isEmpty)
+            const Panel(
+              child: Text(
+                'Your lasting preferences and milestones will appear here.',
+              ),
+            ),
+          for (final memory in model.records('memory'))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Panel(child: Text(memory.data['text'] as String? ?? '')),
+            ),
+          sectionHead('Account usage'),
+          Panel(child: QuotaPanel(model: model)),
+          sectionHead('Sessions'),
+          caption(
+            'The main conversation always answers you. Focused helpers work in the background.',
+          ),
+          const SizedBox(height: 12),
+          if (model.sessions.isEmpty)
+            const Panel(
+              child: Text('Your main session starts with your first message.'),
+            ),
+          for (final session in model.sessions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session['kind'] == 'main'
+                          ? 'Main conversation'
+                          : '${session['kind']} helper',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 5),
+                    caption(contextLabel(session['context'])),
+                    if (session['context'] is Map)
+                      caption(
+                        '${session['context']['used']} of ${session['context']['window']} tokens · latest reported snapshot',
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 14),
+          caption(
+            'Context can be compressed as a conversation grows. Saved memory stays in MongoDB and is supplied to the main conversation again. Context usage is separate from your account usage limit.',
+          ),
+          const SizedBox(height: 28),
+        ],
+      ),
+    ),
+  );
+}

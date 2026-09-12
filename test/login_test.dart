@@ -16,8 +16,9 @@ class LoginApi extends CortexApi {
   @override
   Future<dynamic> call(String method, String path, [Object? data]) async {
     calls.add('$path:${data is Map ? data['loginId'] ?? '' : ''}');
-    if (path == '/v1/account/login')
+    if (path == '/v1/account/login') {
       return pending == null ? response(++counter) : pending!.future;
+    }
     if (path == '/v1/account') return {'account': null};
     return {};
   }

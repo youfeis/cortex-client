@@ -1,0 +1,48 @@
+name: iPhone app
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter analyze
+      - run: flutter test
+  build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Build iPhone release (unsigned)
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+      - name: Package unsigned device build
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app cortex-iphone-unsigned.zip
+      - name: Build simulator app
+        run: flutter build ios --simulator --debug --build-number=${{ github.run_number }}
+      - name: Package simulator build
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app cortex-simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cortex-ios-${{ github.sha }}
+          path: |
+            cortex-iphone-unsigned.zip
+            cortex-simulator.zip
+          retention-days: 14

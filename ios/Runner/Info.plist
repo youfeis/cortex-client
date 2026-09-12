@@ -28,10 +28,6 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Read your iPhone calendars to include fixed events in your day plan. Cortex does not edit your calendars in this version.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Read schedules for your day plan.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take food photos and attach images to your private Cortex chat.</string>
 	<key>NSHealthShareUsageDescription</key>

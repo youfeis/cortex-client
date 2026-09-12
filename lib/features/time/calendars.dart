@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/cortex.dart';
 import '../../main.dart';
+import '../settings/google_accounts.dart';
 import '../../core/quota.dart';
 import '../../app/ui.dart';
 
@@ -45,7 +45,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               titleText('Personal, work, all together.'),
               const SizedBox(height: 10),
               caption(
-                'Choose any calendars below. Cortex keeps the next 30 days up to date when you open the app and while it stays open.',
+                'Google Calendar is your main calendar. Choose which calendars to include. Cortex checks for updates every five minutes, even when the app is closed.',
               ),
               const SizedBox(height: 18),
               Panel(
@@ -57,40 +57,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       m.calendarSyncing
                           ? 'Syncing…'
                           : m.calendarGranted
-                          ? 'Calendar access is on'
-                          : 'Allow calendar access',
+                          ? 'Connected to Google Calendar'
+                          : 'Connect Google Calendar',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     if (m.calendarError != null) caption(m.calendarError!),
-                    if (!m.calendarGranted) ...[
-                      const SizedBox(height: 10),
+                    if (m.calendarSynced != null)
                       caption(
-                        m.calendarPermission == 'denied'
-                            ? 'In iPhone Settings, give Cortex Full Access to Calendars.'
-                            : 'Allow access to include your fixed events in your day.',
+                        'Last synced ${localDateTime(m.calendarSynced!)}',
                       ),
-                      const SizedBox(height: 10),
-                      FilledButton(
-                        onPressed: m.calendarSyncing
-                            ? null
-                            : () => m.calendarPermission == 'denied'
-                                  ? native.invokeMethod('openAppSettings')
-                                  : m.syncCalendars(
-                                      requestAccess: true,
-                                      refreshSources: true,
-                                    ),
-                        child: Text(
-                          m.calendarPermission == 'denied'
-                              ? 'Open Cortex settings'
-                              : 'Allow calendars',
-                        ),
-                      ),
-                    ] else ...[
-                      if (m.calendarSynced != null)
-                        caption(
-                          'Last synced ${localDateTime(m.calendarSynced!)}',
-                        ),
-                    ],
                   ],
                 ),
               ),
@@ -131,26 +106,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                 ),
               ],
-              sectionHead('Missing Google events?'),
+              sectionHead('Google accounts'),
+              GoogleAccounts(model: m),
+              const SizedBox(height: 12),
               caption(
-                '1. Open iPhone Settings → Apps → Calendar → Calendar Accounts.\n2. Add both Google accounts, or open each existing account and turn Calendars on.\n3. Open Apple Calendar and check that the events appear there. Return here and refresh.',
-              ),
-              const SizedBox(height: 10),
-              caption(
-                'Signing in only inside the Google Calendar app does not share its events with Cortex. Work account rules may also restrict calendar access.',
-              ),
-              TextButton(
-                onPressed: () => launchUrl(
-                  Uri.parse(
-                    'https://support.google.com/calendar/answer/99358?co=GENIE.Platform%3DiOS&hl=en',
-                  ),
-                  mode: LaunchMode.externalApplication,
-                ),
-                child: const Text('Google calendar setup guide'),
-              ),
-              const SizedBox(height: 10),
-              caption(
-                'Cortex reads these calendars. Changes made in Google or Apple Calendar arrive after iOS syncs them. All-day entries stay as reminders; they do not block the whole day.',
+                'Changes you make in Google appear here automatically. Ask Cortex in chat to add, move or cancel events. All-day entries stay as reminders.',
               ),
             ],
           ),

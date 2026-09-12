@@ -223,7 +223,7 @@ class TimeScreen extends StatelessWidget {
                         ? 'Syncing calendars…'
                         : model.calendarError ??
                               (model.calendarGranted
-                                  ? 'Next 30 days · updates automatically while Cortex is open'
+                                  ? 'Google Calendar · next 30 days · automatic sync'
                                   : 'Connect your personal and work calendars.'),
                   ),
                   const SizedBox(height: 12),
@@ -235,7 +235,7 @@ class TimeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   caption(
-                    'Calendar changes appear here automatically. Ask Cortex to adjust your day plan when needed.',
+                    'Google Calendar changes appear here automatically. Ask Cortex to adjust your day plan when needed.',
                   ),
                 ],
               ),

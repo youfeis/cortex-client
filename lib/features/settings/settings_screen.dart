@@ -103,8 +103,8 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('Calendars'),
                   subtitle: Text(
                     model.calendarGranted
-                        ? 'Permission allowed · automatic sync'
-                        : 'Permission needed · tap to allow',
+                        ? 'Google connected · automatic sync'
+                        : 'Link Google accounts to sync',
                   ),
                   onTap: () => openCalendars(context, model),
                 ),
@@ -113,7 +113,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           caption(
-            'Enable both Google accounts in iPhone Calendar settings, then choose which calendars Cortex includes.',
+            'Link your personal and work Google accounts below, then choose which calendars Cortex includes.',
           ),
           sectionHead('Google accounts'),
           GoogleAccounts(model: model),

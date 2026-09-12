@@ -76,7 +76,7 @@ class Panel extends StatelessWidget {
       border: Border.all(color: line),
       borderRadius: BorderRadius.circular(22),
     ),
-    child: child,
+    child: Material(type: MaterialType.transparency, child: child),
   );
 }
 

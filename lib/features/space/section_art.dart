@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import '../../main.dart';
 
 /// Resolution-independent illustrations, with matching accessibility labels.
 class SectionArt extends StatelessWidget {

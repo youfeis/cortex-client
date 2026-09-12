@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'cortex.dart';
-import 'main.dart';
-import 'space.dart' show OpenChat;
-import 'quota.dart';
-import 'ui.dart';
+import '../../core/cortex.dart';
+import '../../main.dart';
+import '../../core/navigation.dart';
+import '../../core/quota.dart';
+import '../../app/ui.dart';
 
 DateTime? todoDeadline(Entry task) {
   final value = task.data['deadline']?.toString() ?? '';

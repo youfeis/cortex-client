@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cortex/cortex.dart';
+import 'package:cortex/core/cortex.dart';
 
 class CalendarApi extends CortexApi {
   final snapshots = <Map>[];

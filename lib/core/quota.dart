@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cortex.dart';
-import 'main.dart';
+import '../main.dart';
 
 String localDateTime(DateTime value) {
   final d = value.toLocal();

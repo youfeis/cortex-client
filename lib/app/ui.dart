@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'cortex.dart';
-import 'main.dart';
+import '../core/cortex.dart';
+import '../main.dart';
 
 void notice(BuildContext context, Object message) {
   ScaffoldMessenger.of(context).showSnackBar(

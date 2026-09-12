@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cortex/cortex.dart';
-import 'package:cortex/quota.dart';
-import 'package:cortex/todos.dart';
-import 'package:cortex/ui.dart';
+import 'package:cortex/core/cortex.dart';
+import 'package:cortex/core/quota.dart';
+import 'package:cortex/features/time/todos.dart';
+import 'package:cortex/app/ui.dart';
 
 void main() {
   test('Quota uses all buckets, remaining percentages and Unix seconds', () {

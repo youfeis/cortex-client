@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'cortex.dart';
-import 'main.dart';
-import 'ui.dart';
+import '../../core/cortex.dart';
+import '../../main.dart';
+import '../../app/ui.dart';
 
 const glucoseFactor = 18.0182;
 const bpLower = Color(0xFF9A6845);

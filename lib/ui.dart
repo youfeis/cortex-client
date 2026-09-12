@@ -128,18 +128,24 @@ class Photo extends StatelessWidget {
   );
 }
 
-String contextLabel(dynamic usage) {
-  if (usage is! Map ||
-      usage['window'] == null ||
-      usage['used'] == null ||
-      (usage['window'] as num) <= 0) {
-    return 'Context · waiting for first reply';
+double? contextRemaining(dynamic usage) {
+  if (usage is! Map) return null;
+  final used = usage['used'], window = usage['window'];
+  if (used is! num ||
+      window is! num ||
+      !used.isFinite ||
+      !window.isFinite ||
+      window <= 0) {
+    return null;
   }
-  final remaining =
-      (100 * (1 - (usage['used'] as num) / (usage['window'] as num)))
-          .clamp(0, 100)
-          .round();
-  return '~$remaining% context left';
+  return (1 - used / window).clamp(0, 1).toDouble();
+}
+
+String contextLabel(dynamic usage) {
+  final remaining = contextRemaining(usage);
+  return remaining == null
+      ? 'Context · waiting for first reply'
+      : '~${(remaining * 100).round()}% context left';
 }
 
 /// A consistent iPhone accessory for chat, sheets, and numeric input fields.

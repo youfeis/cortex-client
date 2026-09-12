@@ -18,6 +18,65 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int tab = 0;
   final chatKey = GlobalKey<ChatScreenState>();
+  bool _showingMemory = false;
+  @override
+  void initState() {
+    super.initState();
+    widget.model.addListener(_memoryChanged);
+    _memoryChanged();
+  }
+
+  @override
+  void dispose() {
+    widget.model.removeListener(_memoryChanged);
+    super.dispose();
+  }
+
+  void _memoryChanged() {
+    if (!mounted ||
+        _showingMemory ||
+        !widget.model.foreground ||
+        widget.model.memoryNotices.pending.isEmpty) {
+      return;
+    }
+    _showingMemory = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final notice = widget.model.memoryNotices.pending.first;
+      final text = notice['text'] as String? ?? 'A lasting fact was saved.';
+      final controller = ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(
+            'Memory ${notice['action'] == 'updated' ? 'updated' : 'saved'}: $text',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Saved memory'),
+                content: Text(text),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await widget.model.memoryNotices.displayed(notice);
+      await controller.closed;
+      _showingMemory = false;
+      if (mounted) _memoryChanged();
+    });
+  }
+
   void chat(String prompt, {bool photo = false}) {
     setState(() => tab = 0);
     WidgetsBinding.instance.addPostFrameCallback((_) {

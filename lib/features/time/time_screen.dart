@@ -1,3 +1,4 @@
+import 'alarms.dart';
 import '../fitness/medical_routines.dart';
 import '../../remote_ui/remote_layout.dart';
 import 'package:flutter/material.dart';
@@ -175,6 +176,7 @@ class TimeScreen extends StatelessWidget {
               'routines': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  AlarmList(model: model),
                   sectionHead('Your routines'),
                   if (model.records('routine').isEmpty)
                     caption(

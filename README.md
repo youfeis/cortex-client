@@ -165,3 +165,29 @@ so it is not claimed to be a live iCloud-photo sync.
 Medical routines with `intervalWeeks` and `anchorDate` show their repeat interval
 and next due date. Daily routines retain their existing labels. Retired routines
 are hidden from both Fitness and Time management.
+
+## Alarms, helpers and saved memory
+
+On iOS 26, Settings > Phone permissions > Alarms requests AlarmKit permission.
+Create/change/cancel alarms through chat; Time management shows the current
+phone status. Commands are device-bound and only confirmed after AlarmKit
+succeeds. New commands wait while the phone is offline or suspended. Existing
+system-scheduled alarms do not need the server to ring. Cortex manages its own
+alarms, not the Clock app's existing entries. Initial support is one-time and
+weekly alarms with the system Stop control.
+
+The native UUID/revision ledger prevents duplicate scheduling on network retry.
+Changing an alarm cancels/replaces it; a failed replacement attempts to restore
+the previous schedule and reports the result. Never uninstall the app just to
+update it: its pairing key and local alarm receipts must be preserved.
+
+Helpers appear in Memory & settings with title, status, summary and context.
+A short working status stays in the main chat. Saved-memory snackbars come from
+committed server events; their displayed IDs persist locally across restarts.
+
+`flutter drive --driver=test_driver/integration_test.dart --target=integration_test/alarm_test.dart -d SIMULATOR_ID`
+checks native authorization, one-time/weekly scheduling, duplicate retries,
+replacement, stale revisions, the actual alerting state, and cancellation. It
+uses a single fixed test UUID and removes that test alarm in cleanup. Allow the
+system permission prompt on the test simulator; never run this ringing test on
+a user's physical phone without arranging it with them.

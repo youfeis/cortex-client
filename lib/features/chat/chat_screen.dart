@@ -1,3 +1,4 @@
+import '../../core/phone_alarms.dart';
 import '../../remote_ui/remote_layout.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -307,7 +308,13 @@ class ChatScreenState extends State<ChatScreen> {
                         child: CircularProgressIndicator(strokeWidth: 1.5),
                       ),
                       const SizedBox(width: 10),
-                      caption('$status…'),
+                      Expanded(
+                        child: caption(
+                          (m.chat['helper'] as String? ?? '').isNotEmpty
+                              ? m.chat['helper'] as String
+                              : '$status…',
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -316,6 +323,28 @@ class ChatScreenState extends State<ChatScreen> {
         ),
         'error': Column(
           children: [
+            for (final alarm
+                in m.alarms.items
+                    .where(
+                      (a) =>
+                          ['pending', 'needs_permission'].contains(a['status']),
+                    )
+                    .take(2))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.alarm_rounded, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${alarmTime(alarm)} · ${alarmStatusLabel(alarm['status'] as String?)}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (error != null || m.chat['error'] != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),

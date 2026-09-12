@@ -1,3 +1,4 @@
+import '../time/alarms.dart';
 import 'google_accounts.dart';
 import '../fitness/health_access.dart';
 import 'package:flutter/material.dart';
@@ -98,6 +99,8 @@ class SettingsScreen extends StatelessWidget {
                   child: HealthAccess(model: model),
                 ),
                 const Divider(height: 1),
+                AlarmAccess(model: model),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.calendar_month_outlined),
                   title: const Text('Calendars'),
@@ -119,13 +122,13 @@ class SettingsScreen extends StatelessWidget {
           GoogleAccounts(model: model),
           sectionHead('Saved memory'),
           caption(
-            'Linked to you and your main conversation. Ask in chat to add, correct, or forget something.',
+            'Only routines, lasting changes, and things you ask to remember. Ask in chat to correct or forget a fact.',
           ),
           const SizedBox(height: 12),
           if (model.records('memory').isEmpty)
             const Panel(
               child: Text(
-                'Your lasting preferences and milestones will appear here.',
+                'Routines, lasting changes, and things you ask Cortex to remember appear here.',
               ),
             ),
           for (final memory in model.records('memory'))
@@ -144,7 +147,10 @@ class SettingsScreen extends StatelessWidget {
             const Panel(
               child: Text('Your main session starts with your first message.'),
             ),
-          for (final session in model.sessions)
+          for (final session in [
+            ...model.sessions.where((s) => s['kind'] == 'main'),
+            ...model.sessions.where((s) => s['kind'] != 'main'),
+          ])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Panel(
@@ -154,10 +160,22 @@ class SettingsScreen extends StatelessWidget {
                     Text(
                       session['kind'] == 'main'
                           ? 'Main conversation'
-                          : '${session['kind']} helper',
+                          : session['title'] as String? ??
+                                '${session['kind']} helper',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 5),
+                    if (session['kind'] != 'main') ...[
+                      caption(
+                        '${session['kind']} helper · ${session['status'] ?? 'ready'}',
+                      ),
+                      if ((session['summary'] as String? ?? '').isNotEmpty)
+                        Text(
+                          session['summary'] as String,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                     caption(contextLabel(session['context'])),
                     if (session['context'] is Map)
                       caption(
@@ -169,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           const SizedBox(height: 14),
           caption(
-            'Context can be compressed as a conversation grows. Saved memory stays in MongoDB and is supplied to the main conversation again. Context usage is separate from your account usage limit.',
+            'Context can be compressed as a conversation grows. Saved memory stays in MongoDB. Only changed facts are sent again; helpers keep detailed task history. Context usage is separate from your account usage limit.',
           ),
           const SizedBox(height: 28),
         ],

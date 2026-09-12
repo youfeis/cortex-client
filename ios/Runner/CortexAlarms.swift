@@ -12,6 +12,7 @@ enum CortexAlarms {
   static let manager = AlarmManager.shared
   static var watching = false
   static var changed: (() -> Void)?
+  static var pendingOperation: Task<Void, Never>?
   static let ledgerKey = "cortex.alarm.commands.v1"
   static let specsKey = "cortex.alarm.specs.v1"
 
@@ -33,13 +34,19 @@ enum CortexAlarms {
 
   static func status() throws -> [String: Any] {
     observe()
-    let alarms = permission() == "authorized" ? try manager.alarms : []
-    return ["permission": permission(), "scheduledIds": alarms.map { $0.id.uuidString.lowercased() },
+    let access = permission()
+    let alarms = access == "authorized" ? try manager.alarms : []
+    return ["permission": access, "scheduledIds": alarms.map { $0.id.uuidString.lowercased() },
             "states": Dictionary(uniqueKeysWithValues: alarms.map { ($0.id.uuidString.lowercased(), String(describing: $0.state)) })]
   }
 
   static func handle(_ method: String, _ args: [String: Any], _ result: @escaping FlutterResult) {
-    Task { @MainActor in
+    // AlarmKit's synchronous status read can block its permission dialogue if
+    // polling enters while authorization is suspended. Queue whole operations,
+    // including their awaits, so status and edits cannot enter that interval.
+    let previous = pendingOperation
+    pendingOperation = Task { @MainActor in
+      await previous?.value
       do {
         switch method {
         case "alarmPermission":

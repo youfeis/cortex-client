@@ -13,12 +13,17 @@ void main() {
         home: Scaffold(body: Center(child: Text('Cortex alarm verification'))),
       ),
     );
-    final permission = await native.invokeMethod<Map>('alarmPermission');
+    final permissionRequest = native.invokeMethod<Map>('alarmPermission');
+    // Passive polling must stay responsive while the native permission prompt
+    // is open, and complete after the owner chooses an answer.
+    final concurrentStatus = native.invokeMethod<Map>('alarmStatus');
+    final permission = await permissionRequest;
     expect(
       permission?['permission'],
       'authorized',
       reason: 'Allow alarms in the simulator system prompt.',
     );
+    expect((await concurrentStatus)?['permission'], 'authorized');
     const id = 'b34b3a89-9999-4444-8888-111111111111';
     final baseRevision = DateTime.now().millisecondsSinceEpoch;
     Map<String, dynamic> command(

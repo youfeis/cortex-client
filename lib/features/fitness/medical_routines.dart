@@ -10,14 +10,17 @@ DateTime? nextRoutineDate(Entry r, DateTime now) {
       ? null
       : DateTime.utc(rawAnchor.year, rawAnchor.month, rawAnchor.day);
   final interval = (r.data['intervalWeeks'] as num? ?? 1).toInt();
-  if (interval < 1 || interval > 52 || (interval > 1 && anchor == null))
+  if (interval < 1 || interval > 52 || (interval > 1 && anchor == null)) {
     return null;
+  }
   final days = (r.data['weekdays'] as List? ?? []).cast<int>();
   var date = anchor != null && anchor.isAfter(today) ? anchor : today;
   for (var i = 0; i < 366; i++, date = date.add(const Duration(days: 1))) {
     if (days.isNotEmpty && !days.contains(date.weekday)) continue;
-    if (anchor != null && (date.difference(anchor).inDays ~/ 7) % interval != 0)
+    if (anchor != null &&
+        (date.difference(anchor).inDays ~/ 7) % interval != 0) {
       continue;
+    }
     return date;
   }
   return null;

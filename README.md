@@ -27,7 +27,7 @@ unknown values remain unknown. Saved memories survive context compaction.
 ## iPhone features
 
 - Camera and photo library attachments (up to four photos per message).
-- Apple Health import: today's shared steps, active energy, weight, and BP.
+- Apple Health import: today's shared steps, active energy, weight, BP, and glucose.
 - Calendar import: next seven days from calendars enabled on the phone.
 - Google calendars can be included through the iPhone Calendar account setup.
 - Health and calendar access are requested only when the owner taps Import.
@@ -38,6 +38,20 @@ Meals require the owner to review photo estimates through chat. Fitness data
 is real server data; an empty log is not treated as a complete food diary.
 Apple Health active energy is shown separately from manual exercise to avoid
 adding a second copy of the same workout into the TDEE estimate.
+
+## Fitness trends
+
+Fitness has Today and Trends views. Trends shows weight, glucose, and paired
+blood pressure readings with All / 7 / 30 / 90-day ranges and tap/drag inspection.
+Weight uses one latest reading per date and a calendar-based seven-day average.
+Blood pressure retains each paired reading. Glucose can display mmol/L or mg/dL;
+fasting, before-meal, after-meal, and unspecified readings stay separate.
+Missing dates are not treated as zeroes. Charts do not diagnose readings.
+
+Apple Health import reads the latest available glucose sample today, retaining
+its source identifier so repeat imports do not duplicate it. HealthKit meal
+timing is preserved; before-meal samples are not assumed fasting. See
+[Apple glucose metadata](https://developer.apple.com/documentation/healthkit/hkmetadatakeybloodglucosemealtime).
 
 ## Branches and builds
 

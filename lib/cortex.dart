@@ -129,11 +129,13 @@ class Entry {
   final String id;
   final String kind;
   final Map<String, dynamic> data;
-  Entry(this.id, this.kind, this.data);
+  final DateTime? updated;
+  Entry(this.id, this.kind, this.data, {this.updated});
   factory Entry.fromJson(Map<String, dynamic> json) => Entry(
     json['id'] as String,
     json['kind'] as String,
     Map<String, dynamic>.from(json['data'] as Map),
+    updated: DateTime.tryParse(json['updated']?.toString() ?? ''),
   );
 }
 
@@ -211,6 +213,16 @@ class CortexModel extends ChangeNotifier {
       entries = (value['records'] as List)
           .map((e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
+      if (value['fitnessRecords'] is List) {
+        entries.removeWhere(
+          (e) => ['weight', 'bp', 'glucose'].contains(e.kind),
+        );
+        entries.addAll(
+          (value['fitnessRecords'] as List).map(
+            (e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)),
+          ),
+        );
+      }
       messages = (value['messages'] as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
@@ -366,6 +378,17 @@ class CortexModel extends ChangeNotifier {
         'systolic': (values['systolic'] as num).round(),
         'diastolic': (values['diastolic'] as num).round(),
       });
+    }
+    if (values['glucose'] is Map) {
+      final glucose = Map<String, dynamic>.from(values['glucose'] as Map);
+      final sampleID = glucose.remove('sampleId') as String;
+      await save(
+        'glucose',
+        {...glucose, 'date': today, 'source': 'appleHealth'},
+        id: 'health-glucose-$sampleID',
+        reload: false,
+      );
+      count++;
     }
     if (values['activeKcal'] != null) {
       await add('activity', {

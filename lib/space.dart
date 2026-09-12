@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cortex.dart';
 import 'main.dart';
 import 'ui.dart';
+import 'fitness_trends.dart';
 
 typedef OpenChat = void Function(String prompt, {bool photo});
 
@@ -189,386 +190,396 @@ class FitnessScreen extends StatelessWidget {
           ? (goal['intake'] as num?)?.toDouble()
           : tdee - ((goal['deficit'] as num?)?.toDouble() ?? 0);
       final remaining = budget == null ? null : budget - intake;
-      return Scaffold(
-        appBar: AppBar(title: const Text('Fitness')),
-        body: RefreshIndicator(
-          onRefresh: model.refresh,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+      return DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Fitness'),
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: 'Today'),
+                Tab(text: 'Trends'),
+              ],
+            ),
+          ),
+          body: TabBarView(
             children: [
-              label(today),
-              const SizedBox(height: 10),
-              titleText('Keep showing up for yourself.'),
-              const SizedBox(height: 22),
-              Panel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              RefreshIndicator(
+                onRefresh: model.refresh,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
                   children: [
-                    label('YOUR WEIGHT GOAL'),
-                    const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          current?.toStringAsFixed(1) ?? '—',
-                          style: const TextStyle(
-                            fontSize: 42,
-                            height: 1,
-                            letterSpacing: -1.5,
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 4, left: 6),
-                          child: Text('kg', style: TextStyle(color: muted)),
-                        ),
-                        const Spacer(),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              target == null
-                                  ? 'Set your goal in chat'
-                                  : '→ ${target.toStringAsFixed(0)} kg',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            caption(
-                              goal['date'] == null ? '' : 'by ${goal['date']}',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(5),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 8,
-                        backgroundColor: soft,
-                        color: ink,
-                      ),
-                    ),
+                    label(today),
                     const SizedBox(height: 10),
-                    caption(
-                      current != null && target != null
-                          ? '${max(0.0, current - target).toStringAsFixed(1)} kg to your target · one day at a time'
-                          : 'Tell Cortex your current weight and target.',
-                    ),
-                    if (weights.length > 1) ...[
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        height: 70,
-                        width: double.infinity,
-                        child: CustomPaint(
-                          painter: WeightLine(
-                            weights
-                                .take(30)
-                                .toList()
-                                .reversed
-                                .map((e) => (e.data['kg'] as num).toDouble())
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              sectionHead('Today’s energy'),
-              Panel(
-                color: soft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          intake.round().toString(),
-                          style: const TextStyle(
-                            fontSize: 36,
-                            height: 1,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        caption('kcal recorded'),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    if (budget != null && budget > 0) ...[
-                      LayoutBuilder(
-                        builder: (context, box) {
-                          final scale =
-                              max(max(tdee ?? budget, budget), intake) * 1.08;
-                          return SizedBox(
-                            height: 23,
-                            child: Stack(
-                              alignment: Alignment.centerLeft,
-                              children: [
-                                Container(
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
+                    titleText('Keep showing up for yourself.'),
+                    const SizedBox(height: 22),
+                    Panel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          label('YOUR WEIGHT GOAL'),
+                          const SizedBox(height: 18),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        current?.toStringAsFixed(1) ?? '—',
+                                        style: const TextStyle(
+                                          fontSize: 42,
+                                          height: 1,
+                                          letterSpacing: -1.5,
+                                        ),
+                                      ),
+                                      const Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: 4,
+                                          left: 6,
+                                        ),
+                                        child: Text(
+                                          'kg',
+                                          style: TextStyle(color: muted),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Container(
-                                  height: 10,
-                                  width:
-                                      box.maxWidth *
-                                      (intake / scale).clamp(0, 1),
-                                  decoration: BoxDecoration(
-                                    color: ink,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                Positioned(
-                                  left:
-                                      box.maxWidth *
-                                      (budget / scale).clamp(0, 1),
-                                  child: Container(
-                                    height: 22,
-                                    width: 2,
-                                    color: ink,
-                                  ),
-                                ),
-                                if (tdee != null)
-                                  Positioned(
-                                    left:
-                                        box.maxWidth *
-                                        (tdee / scale).clamp(0, 1),
-                                    child: Container(
-                                      height: 16,
-                                      width: 2,
-                                      color: muted,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      target == null
+                                          ? 'Set your goal in chat'
+                                          : '→ ${target.toStringAsFixed(0)} kg',
+                                      textAlign: TextAlign.right,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
+                                    if (goal['date'] != null)
+                                      Text(
+                                        'by ${goal['date']}',
+                                        textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                          color: muted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 8,
+                              backgroundColor: soft,
+                              color: ink,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          caption(
+                            current != null && target != null
+                                ? '${max(0.0, current - target).toStringAsFixed(1)} kg to your target · one day at a time'
+                                : 'Tell Cortex your current weight and target.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    sectionHead('Today’s energy'),
+                    Panel(
+                      color: soft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                intake.round().toString(),
+                                style: const TextStyle(
+                                  fontSize: 36,
+                                  height: 1,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              caption('kcal recorded'),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          if (budget != null && budget > 0) ...[
+                            LayoutBuilder(
+                              builder: (context, box) {
+                                final scale =
+                                    max(max(tdee ?? budget, budget), intake) *
+                                    1.08;
+                                return SizedBox(
+                                  height: 23,
+                                  child: Stack(
+                                    alignment: Alignment.centerLeft,
+                                    children: [
+                                      Container(
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        height: 10,
+                                        width:
+                                            box.maxWidth *
+                                            (intake / scale).clamp(0, 1),
+                                        decoration: BoxDecoration(
+                                          color: ink,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left:
+                                            box.maxWidth *
+                                            (budget / scale).clamp(0, 1),
+                                        child: Container(
+                                          height: 22,
+                                          width: 2,
+                                          color: ink,
+                                        ),
+                                      ),
+                                      if (tdee != null)
+                                        Positioned(
+                                          left:
+                                              box.maxWidth *
+                                              (tdee / scale).clamp(0, 1),
+                                          child: Container(
+                                            height: 16,
+                                            width: 2,
+                                            color: muted,
+                                          ),
+                                        ),
+                                    ],
                                   ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: caption(
+                                    'Food budget ${budget.round()}',
+                                  ),
+                                ),
+                                caption(
+                                  tdee == null ? '' : 'TDEE ~${tdee.round()}',
+                                ),
                               ],
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: caption('Food budget ${budget.round()}'),
-                          ),
-                          caption(tdee == null ? '' : 'TDEE ~${tdee.round()}'),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        remaining! >= 0
-                            ? '${remaining.round()} kcal left in your plan'
-                            : '${(-remaining).round()} kcal above your plan',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ] else
-                      caption(
-                        'Tell Cortex your energy plan to see your daily bar.',
-                      ),
-                    const SizedBox(height: 10),
-                    caption(
-                      'Food and activity numbers are estimates. This bar reflects what you’ve logged so far.',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => onChat(
-                    'Please estimate this meal. Let me check the estimate before you record it.',
-                    photo: true,
-                  ),
-                  icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-                  label: const Text('Take a food photo'),
-                ),
-              ),
-              sectionHead('Daily check-in'),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Panel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.monitor_weight_outlined,
-                            color: muted,
-                          ),
-                          const SizedBox(height: 12),
-                          label('WEIGHT'),
-                          const SizedBox(height: 7),
-                          Text(
-                            todayRecords('weight').isEmpty
-                                ? 'Not recorded'
-                                : '${todayRecords('weight').first.data['kg']} kg',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
+                            const SizedBox(height: 15),
+                            Text(
+                              remaining! >= 0
+                                  ? '${remaining.round()} kcal left in your plan'
+                                  : '${(-remaining).round()} kcal above your plan',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Panel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.favorite_outline, color: muted),
-                          const SizedBox(height: 12),
-                          label('BLOOD PRESSURE'),
-                          const SizedBox(height: 7),
-                          Text(
-                            bps.isEmpty
-                                ? 'Not recorded'
-                                : '${bps.first.data['systolic']}/${bps.first.data['diastolic']}',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
+                          ] else
+                            caption(
+                              'Tell Cortex your energy plan to see your daily bar.',
                             ),
-                          ),
-                          if (bps.isNotEmpty) caption('mmHg'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              sectionHead('Movement'),
-              Panel(
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.directions_walk_outlined,
-                      size: 32,
-                      color: muted,
-                    ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            steps == null
-                                ? 'No steps imported yet'
-                                : '$steps steps',
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          const SizedBox(height: 10),
                           caption(
-                            activity.isEmpty
-                                ? 'Activity will appear after you log or import it.'
-                                : '${activity.length} activity records today',
+                            'Food and activity numbers are estimates. This bar reflects what you’ve logged so far.',
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => action(context, () async {
-                  final message = await model.importHealth();
-                  if (context.mounted) {
-                    notice(context, message);
-                  }
-                }),
-                icon: const Icon(Icons.favorite_outline, size: 18),
-                label: const Text('Import today’s Apple Health'),
-              ),
-              sectionHead('Food today'),
-              if (meals.isEmpty)
-                caption('Send a photo or tell Cortex what you ate.'),
-              for (final meal in meals)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Panel(
-                    child: Row(
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => onChat(
+                          'Please estimate this meal. Let me check the estimate before you record it.',
+                          photo: true,
+                        ),
+                        icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                        label: const Text('Take a food photo'),
+                      ),
+                    ),
+                    sectionHead('Daily check-in'),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: Text(meal.data['title'] as String)),
-                        Text(
-                          '${meal.data['kcal']} kcal',
-                          style: const TextStyle(color: muted),
+                        Expanded(
+                          child: Panel(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.monitor_weight_outlined,
+                                  color: muted,
+                                ),
+                                const SizedBox(height: 12),
+                                label('WEIGHT'),
+                                const SizedBox(height: 7),
+                                Text(
+                                  todayRecords('weight').isEmpty
+                                      ? 'Not recorded'
+                                      : '${todayRecords('weight').first.data['kg']} kg',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Panel(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.favorite_outline,
+                                  color: muted,
+                                ),
+                                const SizedBox(height: 12),
+                                label('BLOOD PRESSURE'),
+                                const SizedBox(height: 7),
+                                Text(
+                                  bps.isEmpty
+                                      ? 'Not recorded'
+                                      : '${bps.first.data['systolic']}/${bps.first.data['diastolic']}',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (bps.isNotEmpty) caption('mmHg'),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                    sectionHead('Movement'),
+                    Panel(
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.directions_walk_outlined,
+                            size: 32,
+                            color: muted,
+                          ),
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  steps == null
+                                      ? 'No steps imported yet'
+                                      : '$steps steps',
+                                  style: const TextStyle(
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                caption(
+                                  activity.isEmpty
+                                      ? 'Activity will appear after you log or import it.'
+                                      : '${activity.length} activity records today',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => action(context, () async {
+                        final message = await model.importHealth();
+                        if (context.mounted) {
+                          notice(context, message);
+                        }
+                      }),
+                      icon: const Icon(Icons.favorite_outline, size: 18),
+                      label: const Text('Import today’s Apple Health'),
+                    ),
+                    sectionHead('Food today'),
+                    if (meals.isEmpty)
+                      caption('Send a photo or tell Cortex what you ate.'),
+                    for (final meal in meals)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Panel(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(meal.data['title'] as String),
+                              ),
+                              Text(
+                                '${meal.data['kcal']} kcal',
+                                style: const TextStyle(color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    sectionHead('Recent readings'),
+                    for (final weight in weights.take(5))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 9),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: caption(weight.data['date'] as String),
+                            ),
+                            Text('${weight.data['kg']} kg'),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 26),
+                    OutlinedButton.icon(
+                      onPressed: () => onChat(''),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Tell Cortex an update'),
+                    ),
+                    const SizedBox(height: 12),
+                    caption(
+                      'Weight, glucose, blood pressure, meals, goals — just tell me in chat.',
+                    ),
+                  ],
                 ),
-              sectionHead('Recent readings'),
-              for (final weight in weights.take(5))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 9),
-                  child: Row(
-                    children: [
-                      Expanded(child: caption(weight.data['date'] as String)),
-                      Text('${weight.data['kg']} kg'),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 26),
-              OutlinedButton.icon(
-                onPressed: () => onChat(''),
-                icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                label: const Text('Tell Cortex an update'),
               ),
-              const SizedBox(height: 12),
-              caption(
-                'Weight, blood pressure, meals, goals — just tell me in chat.',
-              ),
+              FitnessTrends(model: model),
             ],
           ),
         ),
       );
     },
   );
-}
-
-class WeightLine extends CustomPainter {
-  final List<double> values;
-  WeightLine(this.values);
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.length < 2) {
-      return;
-    }
-    final lo = values.reduce(min) - .2, hi = values.reduce(max) + .2;
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1),
-          y = size.height * (1 - (values[i] - lo) / (hi - lo));
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = ink
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(WeightLine oldDelegate) => oldDelegate.values != values;
 }
 
 class TimeScreen extends StatelessWidget {

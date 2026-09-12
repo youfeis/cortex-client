@@ -71,7 +71,7 @@ enum CortexNative {
 
   static func readHealth(_ result: @escaping FlutterResult) {
     guard HKHealthStore.isHealthDataAvailable() else { result(FlutterError(code: "health", message: "Health data is unavailable on this device.", details: nil)); return }
-    let identifiers: [HKQuantityTypeIdentifier] = [.stepCount, .activeEnergyBurned, .bodyMass, .bloodPressureSystolic, .bloodPressureDiastolic]
+    let identifiers: [HKQuantityTypeIdentifier] = [.stepCount, .activeEnergyBurned, .bodyMass, .bloodPressureSystolic, .bloodPressureDiastolic, .bloodGlucose]
     let types = Set(identifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
     health.requestAuthorization(toShare: [], read: types) { granted, error in
       guard granted, error == nil else { DispatchQueue.main.async { result(FlutterError(code: "health", message: "Health access was not completed. You can still enter records manually.", details: nil)) }; return }
@@ -108,6 +108,19 @@ enum CortexNative {
             values["systolic"] = systolic.quantity.doubleValue(for: .millimeterOfMercury())
             values["diastolic"] = diastolic.quantity.doubleValue(for: .millimeterOfMercury())
             lock.unlock()
+          }
+          group.leave()
+        })
+      }
+      if let type = HKObjectType.quantityType(forIdentifier: .bloodGlucose) {
+        group.enter()
+        health.execute(HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
+          if let sample = samples?.first as? HKQuantitySample {
+            let meal = (sample.metadata?[HKMetadataKeyBloodGlucoseMealTime] as? NSNumber)?.intValue
+            // HealthKit before-meal metadata does not establish a fasting duration.
+            let context = meal == HKBloodGlucoseMealTime.preprandial.rawValue ? "beforeMeal" : meal == HKBloodGlucoseMealTime.postprandial.rawValue ? "afterMeal" : "unspecified"
+            let row: [String: Any] = ["mgdl": sample.quantity.doubleValue(for: HKUnit(from: "mg/dL")), "context": context, "sampleId": sample.uuid.uuidString.lowercased(), "recordedAt": ISO8601DateFormatter().string(from: sample.startDate)]
+            lock.lock(); values["glucose"] = row; lock.unlock()
           }
           group.leave()
         })

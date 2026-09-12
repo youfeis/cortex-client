@@ -27,6 +27,73 @@ Map<String, dynamic> limits() => {
   },
 };
 void main() {
+  testWidgets('Context stays visible through heartbeats and updates lazily', (
+    tester,
+  ) async {
+    final model = CortexModel()
+      ..account = {
+        'account': {'type': 'chatgpt'},
+      };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AnimatedBuilder(
+            animation: model,
+            builder: (_, _) => AppUsageHeader(model: model),
+          ),
+        ),
+      ),
+    );
+    double? progress() => tester
+        .widget<LinearProgressIndicator>(
+          find.byKey(const Key('main-context-progress')),
+        )
+        .value;
+    expect(progress(), 0);
+
+    // The first usable sample appears immediately, even after an empty start.
+    model.chat = {
+      'status': 'ready',
+      'context': {'used': 25, 'window': 100},
+    };
+    model.notifyListeners();
+    await tester.pump();
+    expect(progress(), .75);
+
+    model.chat = {
+      'status': 'working',
+      'context': {'used': 40, 'window': 100},
+    };
+    model.notifyListeners();
+    await tester.pump(const Duration(seconds: 30));
+    expect(progress(), .75);
+    expect(find.text('● Working'), findsOneWidget);
+
+    // The stream omits context; a later snapshot provides a newer estimate.
+    model.chat = {'status': 'ready'};
+    model.notifyListeners();
+    await tester.pump();
+    expect(progress(), .75);
+    expect(find.text('~75% left'), findsOneWidget);
+    model.chat = {
+      'status': 'ready',
+      'context': {'used': 45, 'window': 100},
+    };
+    model.notifyListeners();
+    await tester.pump(const Duration(seconds: 29));
+    expect(progress(), .75);
+    await tester.pump(const Duration(seconds: 1));
+    expect(progress(), .55);
+
+    model.chat = {'status': 'ready', 'context': null};
+    model.notifyListeners();
+    await tester.pump(const Duration(minutes: 1));
+    expect(progress(), .55);
+    expect(find.text('~55% left'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    model.dispose();
+  });
+
   test('Weekly quota selects the Codex ID and seven-day window only', () {
     expect(codexWeeklyQuota(limits())!.remaining, 78);
     expect(

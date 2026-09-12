@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/cortex.dart';
 import '../main.dart';
@@ -21,13 +22,65 @@ String chatStatus(CortexModel model) {
 double usageHeaderHeight(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(32) + 28;
 
-class AppUsageHeader extends StatelessWidget {
+class AppUsageHeader extends StatefulWidget {
   final CortexModel model;
   const AppUsageHeader({super.key, required this.model});
   @override
+  State<AppUsageHeader> createState() => _AppUsageHeaderState();
+}
+
+class _AppUsageHeaderState extends State<AppUsageHeader> {
+  Map<String, dynamic>? _shownContext, _latestContext;
+  late final Timer _contextTimer;
+  CortexModel get model => widget.model;
+
+  @override
+  void initState() {
+    super.initState();
+    _receiveContext();
+    model.addListener(_receiveContext);
+    _contextTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final latest = _latestContext;
+      if (latest != null &&
+          (latest['used'] != _shownContext?['used'] ||
+              latest['window'] != _shownContext?['window'])) {
+        setState(() => _shownContext = latest);
+      }
+    });
+  }
+
+  void _receiveContext() {
+    final incoming = model.chat['context'];
+    // Heartbeats can omit usage. Keep the last valid sample on screen.
+    if (contextRemaining(incoming) == null) return;
+    _latestContext = Map<String, dynamic>.from(incoming as Map);
+    if (_shownContext == null) {
+      setState(() => _shownContext = _latestContext);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AppUsageHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.model != model) {
+      oldWidget.model.removeListener(_receiveContext);
+      _shownContext = _latestContext = null;
+      _receiveContext();
+      model.addListener(_receiveContext);
+    }
+  }
+
+  @override
+  void dispose() {
+    model.removeListener(_receiveContext);
+    _contextTimer.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final contextLeft = contextRemaining(model.chat['context']);
+    final contextLeft = contextRemaining(_shownContext);
     final weekly = codexWeeklyQuota(model.quota);
     final expired = weekly?.resetPassed(now) ?? false;
     final weeklyLeft = expired || !model.loggedIn ? null : weekly?.remaining;
@@ -54,7 +107,7 @@ class AppUsageHeader extends StatelessWidget {
                 fraction: contextLeft,
                 subtitle: '● ${chatStatus(model)}',
                 description:
-                    '${contextLabel(model.chat['context'])}. ${chatStatus(model)}.',
+                    '${contextLabel(_shownContext)}. ${chatStatus(model)}.',
               ),
             ),
             const SizedBox(width: 20),

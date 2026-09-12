@@ -44,7 +44,9 @@ appear in Apple Calendar. Signing in only inside the Google Calendar app is not
 enough. See [Google's iPhone setup guide](https://support.google.com/calendar/answer/99358?co=GENIE.Platform%3DiOS&hl=en).
 
 The app header shows two compact remaining-capacity bars: main-session context
-and Codex weekly quota, with the reset date/time in phone-local time. Other
+and Codex weekly quota, with the reset date/time in phone-local time. The main
+context display keeps its last valid sample and updates once a minute; missing
+heartbeat values do not clear it. Chat status stays live. Other
 quota buckets are omitted. The same weekly quota is available beside Sessions
 in settings. It refreshes at most once a minute automatically
 and on explicit refresh. Unavailable/expired usage never becomes a fictional

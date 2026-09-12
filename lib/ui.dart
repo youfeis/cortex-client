@@ -141,3 +141,48 @@ String contextLabel(dynamic usage) {
           .round();
   return '~$remaining% context left';
 }
+
+/// A consistent iPhone accessory for chat, sheets, and numeric input fields.
+class KeyboardDismissBar extends StatelessWidget {
+  final Widget child;
+  const KeyboardDismissBar({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final keyboard = media.viewInsets.bottom;
+    const height = 40.0;
+    return Stack(
+      children: [
+        MediaQuery(
+          data: keyboard > 0
+              ? media.copyWith(
+                  viewInsets: media.viewInsets.copyWith(
+                    bottom: keyboard + height,
+                  ),
+                )
+              : media,
+          child: child,
+        ),
+        if (keyboard > 0)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: keyboard,
+            height: height,
+            child: Material(
+              color: const Color(0xFFF0F2EF),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      FocusManager.instance.primaryFocus?.unfocus(),
+                  icon: const Icon(Icons.keyboard_hide_outlined, size: 20),
+                  label: const Text('Hide keyboard'),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}

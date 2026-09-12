@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'cortex.dart';
 import 'main.dart';
 import 'ui.dart';
+import 'quota.dart';
+import 'calendars.dart';
 import 'space.dart';
 
 class PairScreen extends StatefulWidget {
@@ -191,7 +193,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: tab,
-      onDestinationSelected: (value) => setState(() => tab = value),
+      onDestinationSelected: (value) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() => tab = value);
+      },
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.chat_bubble_outline_rounded),
@@ -434,23 +439,37 @@ class ChatScreenState extends State<ChatScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: caption('A little space to think.')),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '● ${m.online ? (m.loggedIn ? status : 'Login needed') : 'Reconnecting'}',
-                        style: const TextStyle(fontSize: 11, color: muted),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        contextLabel(m.chat['context']),
-                        style: const TextStyle(fontSize: 10, color: muted),
-                      ),
-                    ],
+                  const Expanded(
+                    child: Text(
+                      'A little space to think.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: muted),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '● ${m.online ? (m.loggedIn ? status : 'Login needed') : 'Reconnecting'}',
+                          style: const TextStyle(fontSize: 11, color: muted),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          contextLabel(m.chat['context']),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 10, color: muted),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              QuotaPanel(model: m, compact: true),
             ],
           ),
         ),
@@ -994,21 +1013,18 @@ class SettingsScreen extends StatelessWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.calendar_month_outlined),
-                  title: const Text('Import iPhone calendars'),
-                  subtitle: const Text('Next 7 days · read only'),
-                  onTap: () => action(context, () async {
-                    final text = await model.importCalendars();
-                    if (context.mounted) {
-                      notice(context, text);
-                    }
-                  }),
+                  title: const Text('Calendars'),
+                  subtitle: const Text(
+                    'Automatic sync · choose personal and work',
+                  ),
+                  onTap: () => openCalendars(context, model),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 10),
           caption(
-            'Google calendars appear here when your Google account is enabled in iPhone Calendar settings. Import again after changes.',
+            'Enable both Google accounts in iPhone Calendar settings, then choose which calendars Cortex includes.',
           ),
           sectionHead('Saved memory'),
           caption(
@@ -1026,6 +1042,8 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 10),
               child: Panel(child: Text(memory.data['text'] as String? ?? '')),
             ),
+          sectionHead('Account usage'),
+          Panel(child: QuotaPanel(model: model)),
           sectionHead('Sessions'),
           caption(
             'The main conversation always answers you. Focused helpers work in the background.',

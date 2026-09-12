@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final controller = ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 6),
+          persist: false,
           content: Text(
             'Memory ${notice['action'] == 'updated' ? 'updated' : 'saved'}: $text',
             maxLines: 2,

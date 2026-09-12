@@ -22,10 +22,18 @@ String localDateTime(DateTime value) {
 }
 
 class QuotaWindow {
-  final String bucket, name;
+  final String bucket, name, limitId;
+  final int? durationMinutes;
   final double? remaining;
   final DateTime? reset;
-  const QuotaWindow(this.bucket, this.name, this.remaining, this.reset);
+  const QuotaWindow(
+    this.bucket,
+    this.name,
+    this.remaining,
+    this.reset, {
+    required this.limitId,
+    this.durationMinutes,
+  });
   bool resetPassed(DateTime now) => reset != null && !reset!.isAfter(now);
 }
 
@@ -40,9 +48,10 @@ String quotaDuration(dynamic minutes, String fallback) {
 List<QuotaWindow> quotaWindows(Map<String, dynamic>? response) {
   if (response == null) return [];
   final buckets = response['rateLimitsByLimitId'];
+  final legacy = response['rateLimits'];
   final Map values = buckets is Map && buckets.isNotEmpty
       ? buckets
-      : {'codex': response['rateLimits']};
+      : {(legacy is Map ? legacy['limitId'] : null) ?? 'codex': legacy};
   final result = <QuotaWindow>[];
   for (final entry in values.entries) {
     if (entry.value is! Map) continue;
@@ -70,6 +79,8 @@ List<QuotaWindow> quotaWindows(Map<String, dynamic>? response) {
                   isUtc: true,
                 ).toLocal()
               : null,
+          limitId: entry.key.toString(),
+          durationMinutes: (window['windowDurationMins'] as num?)?.toInt(),
         ),
       );
     }
@@ -77,117 +88,86 @@ List<QuotaWindow> quotaWindows(Map<String, dynamic>? response) {
   return result;
 }
 
+QuotaWindow? codexWeeklyQuota(Map<String, dynamic>? response) {
+  for (final window in quotaWindows(response)) {
+    if (window.limitId == 'codex' && window.durationMinutes == 10080) {
+      return window;
+    }
+  }
+  return null;
+}
+
+bool quotaIsStale(CortexModel model, DateTime now) =>
+    model.quotaFailed ||
+    (model.quotaUpdated != null &&
+        now.difference(model.quotaUpdated!) > const Duration(minutes: 2));
+
 class QuotaPanel extends StatelessWidget {
   final CortexModel model;
-  final bool compact;
-  const QuotaPanel({super.key, required this.model, this.compact = false});
+  const QuotaPanel({super.key, required this.model});
   @override
   Widget build(BuildContext context) {
-    final windows = quotaWindows(model.quota);
+    final weekly = codexWeeklyQuota(model.quota);
     final now = DateTime.now();
-    final stale =
-        model.quotaFailed ||
-        (model.quotaUpdated != null &&
-            now.difference(model.quotaUpdated!) > const Duration(minutes: 2));
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final visible = compact ? windows.take(keyboard ? 0 : 2) : windows;
+    final expired = weekly?.resetPassed(now) ?? false;
+    final remaining = expired ? null : weekly?.remaining;
+    final stale = quotaIsStale(model, now);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
+            const Expanded(
               child: Text(
-                'Quota left · account-wide',
-                style: TextStyle(
-                  fontSize: compact ? 11 : 13,
-                  color: muted,
-                  fontWeight: FontWeight.w600,
-                ),
+                'Codex weekly',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
-            if (compact)
-              InkWell(
-                onTap: () {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  model.readQuota(force: true);
-                  showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    showDragHandle: true,
-                    builder: (_) => SafeArea(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
-                        child: AnimatedBuilder(
-                          animation: model,
-                          builder: (_, _) => QuotaPanel(model: model),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Text('Details', style: TextStyle(fontSize: 12)),
-                ),
-              )
-            else
-              IconButton(
-                tooltip: 'Refresh quota',
-                onPressed: model.quotaLoading
-                    ? null
-                    : () => model.readQuota(force: true),
-                icon: const Icon(Icons.refresh, size: 20),
-              ),
+            IconButton(
+              tooltip: 'Refresh quota',
+              onPressed: model.quotaLoading
+                  ? null
+                  : () => model.readQuota(force: true),
+              icon: const Icon(Icons.refresh, size: 20),
+            ),
           ],
         ),
-        if (windows.isEmpty && !(compact && keyboard))
+        Text(
+          !model.loggedIn
+              ? 'Connect Codex to see usage.'
+              : expired
+              ? 'Waiting for the next quota update'
+              : remaining == null
+              ? 'Weekly quota unavailable'
+              : '${remaining.round()}% left${stale ? ' · last known' : ''}',
+        ),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: (remaining ?? 0) / 100,
+          backgroundColor: line,
+          color: muted,
+          semanticsLabel: 'Codex weekly quota remaining',
+          semanticsValue: remaining == null
+              ? 'Unavailable'
+              : '${remaining.round()} percent',
+        ),
+        const SizedBox(height: 8),
+        Text(
+          weekly?.reset == null
+              ? 'Reset time unavailable'
+              : '${expired ? 'Reset was' : 'Resets'} ${localDateTime(weekly!.reset!)}',
+          style: const TextStyle(fontSize: 12, color: muted),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Shared across your Codex sessions. Reset times use your phone’s local time.',
+          style: TextStyle(fontSize: 12, color: muted),
+        ),
+        if (model.quotaUpdated != null)
           Text(
-            !model.loggedIn
-                ? 'Connect Codex to see usage.'
-                : model.quotaLoading
-                ? 'Checking usage…'
-                : 'Usage is not available yet.',
+            'Last checked ${localDateTime(model.quotaUpdated!)}',
             style: const TextStyle(fontSize: 12, color: muted),
           ),
-        for (final window in visible)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${windows.map((w) => w.bucket).toSet().length > 1 ? '${window.bucket} · ' : ''}${window.name} · ${window.resetPassed(now)
-                      ? 'awaiting update'
-                      : window.remaining == null
-                      ? 'unavailable'
-                      : '${window.remaining!.round()}% left${stale ? ' (last known)' : ''}'}',
-                  style: TextStyle(
-                    fontSize: compact ? 12 : 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  window.reset == null
-                      ? 'Reset time unavailable'
-                      : '${window.resetPassed(now) ? 'Reset was' : 'Resets'} ${localDateTime(window.reset!)}',
-                  style: TextStyle(fontSize: compact ? 11 : 12, color: muted),
-                ),
-              ],
-            ),
-          ),
-        if (!compact) ...[
-          const SizedBox(height: 8),
-          const Text(
-            'Reset times use your phone’s local time. This quota is shared by all Codex sessions on your account.',
-            style: TextStyle(fontSize: 12, color: muted),
-          ),
-          if (model.quotaUpdated != null)
-            Text(
-              'Last checked ${localDateTime(model.quotaUpdated!)}${stale ? ' · refresh needed' : ''}',
-              style: const TextStyle(fontSize: 12, color: muted),
-            ),
-        ],
       ],
     );
   }

@@ -8,6 +8,7 @@ import 'cortex.dart';
 import 'main.dart';
 import 'ui.dart';
 import 'quota.dart';
+import 'app_header.dart';
 import 'calendars.dart';
 import 'space.dart';
 
@@ -145,7 +146,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      toolbarHeight: 70,
+      toolbarHeight: 56,
+      bottom: PreferredSize(
+        preferredSize: Size.fromHeight(usageHeaderHeight(context)),
+        child: AppUsageHeader(model: widget.model),
+      ),
       title: const Row(
         children: [
           Icon(Icons.psychology_outlined, size: 30),
@@ -383,96 +388,12 @@ class ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void help() => showModalBottomSheet<void>(
-    context: context,
-    useSafeArea: true,
-    builder: (_) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            titleText('You can change direction.'),
-            const SizedBox(height: 18),
-            const Text(
-              'Send · start a reply.\n\nSteer · add a correction while Cortex is working. It continues with your new direction.\n\nStop ■ · interrupt the current work. Your draft and photos stay here.',
-            ),
-            const SizedBox(height: 20),
-            caption(
-              'Thinking → working → replying → ready.\nContext left is an estimate from the latest Codex update. Saved memory lives separately and survives context compression.',
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    ),
-  );
   @override
   Widget build(BuildContext context) {
     final m = widget.model;
-    final status = switch (m.chat['status']) {
-      'thinking' => 'Thinking',
-      'working' => 'Working',
-      'replying' => 'Replying',
-      'steering' => 'Updating direction',
-      'stopped' => 'Stopped',
-      'error' => 'Needs attention',
-      _ => 'Ready',
-    };
+    final status = chatStatus(m);
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 12, 14, 16),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(child: titleText('Chat')),
-                  IconButton(
-                    tooltip: 'Chat controls explained',
-                    onPressed: help,
-                    icon: const Icon(Icons.help_outline, size: 18),
-                  ),
-                ],
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'A little space to think.',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: muted),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '● ${m.online ? (m.loggedIn ? status : 'Login needed') : 'Reconnecting'}',
-                          style: const TextStyle(fontSize: 11, color: muted),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          contextLabel(m.chat['context']),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(fontSize: 10, color: muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              QuotaPanel(model: m, compact: true),
-            ],
-          ),
-        ),
         const Divider(height: 1),
         if (!m.loggedIn)
           Container(

@@ -42,9 +42,10 @@ Google accounts must have Calendars enabled in iPhone Settings, and events must
 appear in Apple Calendar. Signing in only inside the Google Calendar app is not
 enough. See [Google's iPhone setup guide](https://support.google.com/calendar/answer/99358?co=GENIE.Platform%3DiOS&hl=en).
 
-The chat header shows quota remaining and reset dates/times in phone-local time.
-Details includes every reported bucket; the same account-wide view is available
-beside Sessions in settings. It refreshes at most once a minute automatically
+The app header shows two compact remaining-capacity bars: main-session context
+and Codex weekly quota, with the reset date/time in phone-local time. Other
+quota buckets are omitted. The same weekly quota is available beside Sessions
+in settings. It refreshes at most once a minute automatically
 and on explicit refresh. Unavailable/expired usage never becomes a fictional
 100% balance. See [Codex account rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
 

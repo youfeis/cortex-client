@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.mobileprovision
+.local/

@@ -3,6 +3,7 @@ import '../fitness/health_access.dart';
 import 'package:flutter/material.dart';
 import '../../core/cortex.dart';
 import '../../app/ui.dart';
+import '../../app/avatars.dart';
 import '../../core/quota.dart';
 import '../time/calendars.dart';
 
@@ -19,6 +20,35 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(22),
         children: [
+          Panel(
+            child: Row(
+              children: [
+                OwnerAvatar(model: model, size: 52),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Your space',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      caption(
+                        model.ownerAvatarId == null
+                            ? 'Your personal assistant'
+                            : 'Your account photo · stored privately',
+                      ),
+                    ],
+                  ),
+                ),
+                const CortexAvatar(size: 40),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
           Panel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

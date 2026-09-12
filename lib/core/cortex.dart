@@ -189,6 +189,16 @@ class CortexModel extends ChangeNotifier {
       (chat['turnId'] as String? ?? '').isNotEmpty ||
       ['thinking', 'working', 'replying', 'steering'].contains(chat['status']);
   bool get loggedIn => account?['account'] != null;
+  String? get ownerAvatarId {
+    for (final entry in records('memory')) {
+      if (entry.id == 'memory-owner-avatar') {
+        final id = entry.data['avatarImageId'];
+        if (id is String && RegExp(r'^[a-f0-9]{32}$').hasMatch(id)) return id;
+      }
+    }
+    return null;
+  }
+
   Future<void> initialize() async {
     initializing = true;
     startupError = null;

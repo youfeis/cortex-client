@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/cortex.dart';
 import '../../main.dart';
 import '../../app/ui.dart';
+import '../../app/avatars.dart';
 import '../../app/usage_header.dart';
 
 import '../settings/codex_login.dart';
@@ -223,11 +224,7 @@ class ChatScreenState extends State<ChatScreen> {
                   padding: const EdgeInsets.only(top: 50),
                   child: Column(
                     children: [
-                      const Icon(
-                        Icons.psychology_outlined,
-                        size: 42,
-                        color: muted,
-                      ),
+                      const CortexAvatar(size: 58),
                       const SizedBox(height: 18),
                       titleText('What’s on your mind?'),
                       const SizedBox(height: 12),
@@ -246,6 +243,7 @@ class ChatScreenState extends State<ChatScreen> {
                     'content': Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        messageIdentity(m, message['role'] == 'user'),
                         if (((message['images'] ?? []) as List).isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -284,7 +282,15 @@ class ChatScreenState extends State<ChatScreen> {
                   },
                 ),
               if ((m.chat['text'] as String? ?? '').isNotEmpty)
-                Panel(child: MarkdownBody(data: m.chat['text'] as String)),
+                Panel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      messageIdentity(m, false),
+                      MarkdownBody(data: m.chat['text'] as String),
+                    ],
+                  ),
+                ),
               if (m.busy && (m.chat['text'] as String? ?? '').isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(12),

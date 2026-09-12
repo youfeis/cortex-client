@@ -1,8 +1,10 @@
 import '../remote_ui/layout_store.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -28,7 +30,11 @@ class ApiException implements Exception {
 
 class CortexApi {
   static const origin = 'https://cortex.miaotutu.com';
-  final http.Client _http = http.Client();
+  final http.Client _http = Platform.isIOS
+      ? CupertinoClient.fromSessionConfiguration(
+          URLSessionConfiguration.ephemeralSessionConfiguration(),
+        )
+      : http.Client();
   String? _publicKey;
   Future<String> publicKey() async =>
       _publicKey ??= (await native.invokeMethod<String>('publicKey'))!;

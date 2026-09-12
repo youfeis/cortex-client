@@ -180,7 +180,10 @@ class TimeScreen extends StatelessWidget {
                     caption(
                       'A few gentle defaults will be added at your first check-in. Change them through chat.',
                     ),
-                  for (final r in model.records('routine'))
+                  for (final r
+                      in model
+                          .records('routine')
+                          .where((r) => r.data['enabled'] != false))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(

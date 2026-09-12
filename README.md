@@ -27,16 +27,17 @@ unknown values remain unknown. Saved memories survive context compaction.
 ## iPhone features
 
 - Camera and photo library attachments (up to four photos per message).
-- Apple Health import: today's shared steps, active energy, weight, BP, and glucose.
+- Automatic Apple Health sync after setup: steps, active energy, weight, BP and glucose.
 - A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
 - Automatic calendar sync: the next 30 days from any selected iPhone calendars.
 - A calendar picker groups personal/work calendars by account and shows counts.
 - Calendar permission is requested from Calendars; once granted, refresh runs on
   launch, resume, EventKit change notifications, and every minute while open.
 - Selection is saved per device. Denied access never deletes mirrored events.
-- Health import remains manual. Calendar and Health access are read-only.
-- This version does not write to Google Calendar, set alarms, or promise sync
-  while iOS has suspended or closed Cortex.
+- Phone Calendar and Health permissions are read-only. Google event changes
+  use separately linked Google accounts and the server Calendar API.
+- This version does not set alarms or run data sync while iOS has suspended
+  or closed Cortex.
 
 Google accounts must have Calendars enabled in iPhone Settings, and events must
 appear in Apple Calendar. Signing in only inside the Google Calendar app is not
@@ -69,8 +70,8 @@ Blood pressure retains each paired reading. Glucose can display mmol/L or mg/dL;
 fasting, before-meal, after-meal, and unspecified readings stay separate.
 Missing dates are not treated as zeroes. Charts do not diagnose readings.
 
-Apple Health import reads the latest available glucose sample today, retaining
-its source identifier so repeat imports do not duplicate it. HealthKit meal
+Apple Health sync retains each available glucose sample from the last 90 days,
+using its source identifier so repeat reads do not duplicate it. HealthKit meal
 timing is preserved; before-meal samples are not assumed fasting. See
 [Apple glucose metadata](https://developer.apple.com/documentation/healthkit/hkmetadatakeybloodglucosemealtime).
 
@@ -152,3 +153,11 @@ Calendar permissions and selection remain native. EventKit refreshes the selecte
 accounts automatically while active and on resume. Google Calendar linking in
 Settings additionally lets the server session edit real Google events through
 the official API. This does not change the phone's Apple Calendar account setup.
+
+## Avatars
+
+Cortex uses a small vector owl drawn in Flutter. The owner's photo is fetched
+through signed image requests, with its ID in the private owner-avatar memory
+record. No personal picture is committed or bundled. The initial picture came
+from the owner's Mac account image; iOS has no direct Apple Account avatar API,
+so it is not claimed to be a live iCloud-photo sync.

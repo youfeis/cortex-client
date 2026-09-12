@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/cortex.dart';
 import '../main.dart';
 import 'usage_header.dart';
+import 'avatars.dart';
 import '../features/space/space_screen.dart';
 
 import '../features/chat/chat_screen.dart';
@@ -34,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       title: const Row(
         children: [
-          Icon(Icons.psychology_outlined, size: 30),
+          CortexAvatar(size: 34),
           SizedBox(width: 10),
           Expanded(
             child: Column(

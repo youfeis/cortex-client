@@ -146,4 +146,33 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     model.dispose();
   });
+
+  testWidgets('Memory banners expire and let the next saved memory appear', (
+    tester,
+  ) async {
+    final model = CortexModel();
+    await model.memoryNotices.receive([
+      memoryRecord('001'),
+      memoryRecord('002', action: 'updated'),
+    ]);
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(model: model)));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Memory saved: You prefer quiet mornings.'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory saved: You prefer quiet mornings.'), findsNothing);
+    expect(
+      find.text('Memory updated: You prefer quiet mornings.'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsNothing);
+    expect(model.memoryNotices.pending, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    model.dispose();
+  });
 }

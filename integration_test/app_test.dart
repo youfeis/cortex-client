@@ -39,7 +39,7 @@ void main() {
     }
     await waitFor(find.text('My space'));
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('Connect Codex to start chatting.'), findsOneWidget);
+    expect(find.byTooltip('Camera or photo library'), findsOneWidget);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('chat');
     await tester.enterText(
@@ -56,6 +56,31 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('fitness');
+    await tester.tap(find.text('Trends'));
+    await tester.pumpAndSettle();
+    expect(find.text('See the bigger picture.'), findsOneWidget);
+    await binding.takeScreenshot('trends-weight');
+    await tester.scrollUntilVisible(
+      find.text('Blood glucose'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('trends-glucose');
+    await tester.scrollUntilVisible(
+      find.text('Blood pressure'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byTooltip('Previous blood pressure reading'),
+    );
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('trends-bp');
+    await tester.tap(find.byTooltip('Previous blood pressure reading'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.text('Time\nmanagement'));

@@ -35,7 +35,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Take food photos and attach images to your private Cortex chat.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Import your steps, active energy, weight, and blood pressure into your private fitness records.</string>
+	<string>Import your steps, active energy, weight, blood pressure, and glucose into your private fitness records.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos to attach to your private Cortex chat.</string>
 	<key>UIApplicationSceneManifest</key>

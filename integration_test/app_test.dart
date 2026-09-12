@@ -40,6 +40,7 @@ void main() {
     await waitFor(find.text('My space'));
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('Connect Codex to start chatting.'), findsOneWidget);
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('chat');
     await tester.enterText(
       find.byType(TextField),
@@ -47,17 +48,20 @@ void main() {
     );
     await tester.tap(find.text('My space'));
     await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('my-space');
     await tester.tap(find.text('Fitness').first);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Today’s energy'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('fitness');
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.text('Time\nmanagement'));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('I’m awake · arrange my day'), findsOneWidget);
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('time');
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 1));

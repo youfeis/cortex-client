@@ -139,6 +139,14 @@ class Entry {
 
 class CortexModel extends ChangeNotifier {
   final CortexApi api;
+  bool _disposed = false;
+  @override
+  void notifyListeners() {
+    if (!_disposed) {
+      super.notifyListeners();
+    }
+  }
+
   CortexModel({CortexApi? api}) : api = api ?? CortexApi();
   bool initializing = true, paired = false, online = true, refreshing = false;
   String? startupError;
@@ -285,6 +293,9 @@ class CortexModel extends ChangeNotifier {
   Future<Uint8List> image(String id) =>
       _images.putIfAbsent(id, () => api.image(id));
   void startStream() {
+    if (_disposed) {
+      return;
+    }
     final generation = ++_streamGeneration;
     () async {
       var failures = 0;
@@ -306,6 +317,9 @@ class CortexModel extends ChangeNotifier {
             }
           }
         } catch (_) {
+          if (_disposed || generation != _streamGeneration) {
+            return;
+          }
           online = false;
           failures++;
           notifyListeners();
@@ -399,6 +413,7 @@ class CortexModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _streamGeneration++;
     _refreshTimer?.cancel();
     api.close();

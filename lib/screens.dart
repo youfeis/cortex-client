@@ -439,7 +439,7 @@ class ChatScreenState extends State<ChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '● ${m.online ? status : 'Reconnecting'}',
+                        '● ${m.online ? (m.loggedIn ? status : 'Login needed') : 'Reconnecting'}',
                         style: const TextStyle(fontSize: 11, color: muted),
                       ),
                       const SizedBox(height: 3),

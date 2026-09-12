@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cortex/cortex.dart';
@@ -34,7 +35,28 @@ class FakeModel extends CortexModel {
   }
 }
 
+class ClosingApi extends CortexApi {
+  final finished = Completer<void>();
+  @override
+  Stream<Map<String, dynamic>> events() async* {
+    await finished.future;
+    throw ApiException(503, 'Connection closed');
+  }
+}
+
 void main() {
+  test(
+    'Closing the app cancels a late stream error without updating disposed state',
+    () async {
+      final api = ClosingApi();
+      final model = CortexModel(api: api)..paired = true;
+      model.startStream();
+      await Future<void>.delayed(Duration.zero);
+      model.dispose();
+      api.finished.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    },
+  );
   test('Context stays unknown until Codex reports a window', () {
     expect(contextLabel(null), contains('waiting'));
     expect(

@@ -240,55 +240,60 @@ class ChatScreenState extends State<ChatScreen> {
                       ? 'userMessage'
                       : 'assistantMessage',
                   slots: {
-                    'content': Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        messageIdentity(m, message['role'] == 'user'),
-                        if (((message['images'] ?? []) as List).isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final id in message['images'] as List)
-                                  Photo(model: m, id: id as String, size: 105),
-                              ],
-                            ),
-                          ),
-                        if ((message['text'] as String? ?? '').isNotEmpty)
-                          MarkdownBody(
-                            data: message['text'] as String,
-                            selectable: true,
-                            styleSheet: MarkdownStyleSheet(
-                              p: const TextStyle(
-                                fontSize: 15,
-                                color: ink,
-                                height: 1.5,
+                    'content': messageContent(
+                      m,
+                      message['role'] == 'user',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (((message['images'] ?? []) as List).isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final id in message['images'] as List)
+                                    Photo(
+                                      model: m,
+                                      id: id as String,
+                                      size: 105,
+                                    ),
+                                ],
                               ),
                             ),
-                            onTapLink: (_, href, _) {
-                              if (href != null &&
-                                  Uri.tryParse(href)?.scheme == 'https') {
-                                launchUrl(
-                                  Uri.parse(href),
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              }
-                            },
-                          ),
-                      ],
+                          if ((message['text'] as String? ?? '').isNotEmpty)
+                            MarkdownBody(
+                              data: message['text'] as String,
+                              selectable: true,
+                              styleSheet: MarkdownStyleSheet(
+                                p: const TextStyle(
+                                  fontSize: 15,
+                                  color: ink,
+                                  height: 1.5,
+                                ),
+                              ),
+                              onTapLink: (_, href, _) {
+                                if (href != null &&
+                                    Uri.tryParse(href)?.scheme == 'https') {
+                                  launchUrl(
+                                    Uri.parse(href),
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                }
+                              },
+                            ),
+                        ],
+                      ),
                     ),
                   },
                 ),
               if ((m.chat['text'] as String? ?? '').isNotEmpty)
                 Panel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      messageIdentity(m, false),
-                      MarkdownBody(data: m.chat['text'] as String),
-                    ],
+                  child: messageContent(
+                    m,
+                    false,
+                    child: MarkdownBody(data: m.chat['text'] as String),
                   ),
                 ),
               if (m.busy && (m.chat['text'] as String? ?? '').isEmpty)

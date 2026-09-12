@@ -103,23 +103,18 @@ class OwnerAvatar extends StatelessWidget {
   }
 }
 
-Widget messageIdentity(CortexModel model, bool owner) => Padding(
-  padding: const EdgeInsets.only(bottom: 9),
-  child: Row(
-    mainAxisAlignment: owner ? MainAxisAlignment.end : MainAxisAlignment.start,
-    children: [
-      if (!owner) const CortexAvatar(size: 26),
-      if (!owner) const SizedBox(width: 7),
-      Text(
-        owner ? 'You' : 'Cortex',
-        style: const TextStyle(
-          fontSize: 12,
-          color: muted,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      if (owner) const SizedBox(width: 7),
-      if (owner) OwnerAvatar(model: model, size: 26),
+Widget messageContent(
+  CortexModel model,
+  bool owner, {
+  required Widget child,
+}) => Row(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    if (!owner) ...[const CortexAvatar(size: 40), const SizedBox(width: 12)],
+    Expanded(child: child),
+    if (owner) ...[
+      const SizedBox(width: 12),
+      OwnerAvatar(model: model, size: 40),
     ],
-  ),
+  ],
 );

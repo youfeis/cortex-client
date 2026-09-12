@@ -18,7 +18,7 @@ class GoogleAccounts extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         caption(
-          'Link your personal and work accounts. Then ask Cortex to create, move or remove events.',
+          'Link your personal and work accounts to sync events automatically. Ask Cortex to create, move or remove events.',
         ),
         for (final account in model.googleAccounts)
           ListTile(

@@ -1,17 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cortex/core/cortex.dart';
 
 class CalendarApi extends CortexApi {
-  final snapshots = <Map>[];
+  final requests = <Map>[];
   bool fail = false;
+  String status = 'ready';
+  int refreshes = 0;
+  List<String>? selection;
   @override
   Future<dynamic> call(String method, String path, [Object? data]) async {
-    if (path == '/v1/calendars/sync') {
+    if (path == '/v1/google/sync') {
       if (fail) throw ApiException(503, 'Retry');
-      snapshots.add(data as Map);
-      return {'count': 0};
+      final request = data as Map;
+      requests.add(request);
+      if (request.containsKey('selectedIds')) {
+        selection = (request['selectedIds'] as List).cast<String>();
+      }
+      return {
+        'source': 'google',
+        'status': status,
+        'syncedAt': '2026-09-13T01:00:00Z',
+        'selectedIds': selection,
+        'calendars': [
+          for (final id in ['personal', 'work'])
+            {'id': id, 'title': id, 'sourceId': id, 'account': id, 'count': 1},
+        ],
+        if (status == 'needsLink')
+          'error': 'Link a Google account to start sync.',
+      };
     }
+    expect(path, '/v1/snapshot');
+    refreshes++;
     return {'records': [], 'messages': [], 'sessions': [], 'chat': {}};
   }
 }
@@ -19,86 +38,56 @@ class CalendarApi extends CortexApi {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'Granted permission automatically syncs all calendars, persists selection and protects against denial',
+    'Google owns sync and shared selection; phone calendar import is never called',
     () async {
-      SharedPreferences.setMockInitialValues({});
-      var permission = 'granted';
-      final calls = <Map>[];
+      final nativeCalls = <String>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(native, (call) async {
-            calls.add(call.arguments as Map);
-            if (permission != 'granted') return {'permission': permission};
-            final ids =
-                (call.arguments as Map)['selectedIds'] as List? ??
-                ['personal', 'work'];
-            return {
-              'permission': 'granted',
-              'start': '2026-09-13',
-              'end': '2026-10-13',
-              'calendars': [
-                for (final id in ['personal', 'work'])
-                  {
-                    'id': id,
-                    'title': id,
-                    'sourceId': id,
-                    'account': id,
-                    'count': 1,
-                  },
-              ],
-              'events': [
-                for (final id in ids)
-                  {
-                    'externalId': 'event-$id',
-                    'calendarId': id,
-                    'date': '2026-09-14',
-                    'title': id,
-                    'start': 600,
-                    'end': 630,
-                  },
-              ],
-            };
+            nativeCalls.add(call.method);
+            expect(call.method, 'calendarTimeZone');
+            return 'Asia/Seoul';
           });
       final api = CalendarApi();
       final m = CortexModel(api: api)..paired = true;
       await m.syncCalendars();
-      expect(api.snapshots.single['events'], hasLength(2));
-      expect(calls.single['requestAccess'], isFalse);
+      expect(m.calendarGranted, isTrue);
+      expect(m.calendars, hasLength(2));
+      expect(api.requests.single['timeZone'], 'Asia/Seoul');
+      expect(api.requests.single['force'], isFalse);
       await m.syncCalendars();
       expect(
-        api.snapshots,
-        hasLength(1),
-        reason: 'Unchanged snapshots do not rewrite MongoDB',
+        api.refreshes,
+        1,
+        reason: 'Unchanged cache does not reload the screen',
       );
       await m.chooseCalendars({'work'});
+      expect(api.requests.last['selectedIds'], ['work']);
+      expect(m.selectedCalendars, {'work'});
+      final secondDevice = CortexModel(api: api)..paired = true;
+      await secondDevice.syncCalendars();
       expect(
-        (api.snapshots.last['events'] as List).single['calendarId'],
-        'work',
+        secondDevice.selectedCalendars,
+        {'work'},
+        reason: 'Selection is stored on the server',
       );
-      expect(
-        (await SharedPreferences.getInstance()).getStringList(
-          'calendar.selection.v1',
-        ),
-        ['work'],
-      );
-      permission = 'denied';
-      await m.syncCalendars();
-      expect(
-        api.snapshots,
-        hasLength(2),
-        reason: 'Revoked access must not erase events',
-      );
-      permission = 'granted';
       api.fail = true;
       await m.chooseCalendars({});
       expect(m.calendarError, isNotNull);
-      api.fail = false;
-      await m.syncCalendars();
       expect(
-        api.snapshots.last['events'],
-        isEmpty,
-        reason: 'Explicitly choosing no calendars clears this device mirror',
+        m.selectedCalendars,
+        {'work'},
+        reason: 'Failed save must retain the previous selection',
       );
+      api.fail = false;
+      await m.chooseCalendars({});
+      expect(m.selectedCalendars, isEmpty);
+      api.status = 'needsLink';
+      await m.syncCalendars();
+      expect(m.calendarGranted, isFalse);
+      expect(m.calendarError, contains('Link a Google account'));
+      expect(nativeCalls, everyElement('calendarTimeZone'));
       m.dispose();
+      secondDevice.dispose();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(native, null);
     },

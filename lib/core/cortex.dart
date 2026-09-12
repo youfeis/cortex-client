@@ -9,7 +9,6 @@ import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 const native = MethodChannel('com.miaotutu.cortex/native');
 String day([DateTime? date]) =>
@@ -169,7 +168,7 @@ class CortexModel extends ChangeNotifier {
   Map<String, dynamic> chat = {'status': 'ready'};
   Map<String, dynamic>? account;
   int _streamGeneration = 0;
-  Timer? _refreshTimer, _servicesTimer, _calendarDebounce;
+  Timer? _refreshTimer, _servicesTimer;
   Map<String, dynamic>? quota;
   DateTime? quotaUpdated, _quotaAttempt;
   bool quotaLoading = false, quotaFailed = false, foreground = true;
@@ -178,8 +177,7 @@ class CortexModel extends ChangeNotifier {
   DateTime? calendarSynced;
   List<Map<String, dynamic>> calendars = [];
   Set<String>? selectedCalendars;
-  bool calendarSyncing = false, _calendarLoaded = false;
-  String? _calendarFingerprint;
+  bool calendarSyncing = false;
   Future<void>? _calendarWork;
   bool get calendarGranted => calendarPermission == 'granted';
   final Map<String, Future<Uint8List>> _images = {};
@@ -333,16 +331,6 @@ class CortexModel extends ChangeNotifier {
         _healthDebounce?.cancel();
         _healthDebounce = Timer(const Duration(seconds: 2), () => syncHealth());
       }
-      if (call.method == 'calendarsChanged' &&
-          foreground &&
-          paired &&
-          !_disposed) {
-        _calendarDebounce?.cancel();
-        _calendarDebounce = Timer(
-          const Duration(seconds: 2),
-          () => syncCalendars(),
-        );
-      }
     });
     _servicesTimer?.cancel();
     _servicesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -362,9 +350,7 @@ class CortexModel extends ChangeNotifier {
 
   void setForeground(bool active) {
     foreground = active;
-    if (!active) {
-      _calendarDebounce?.cancel();
-    } else if (paired) {
+    if (active && paired) {
       unawaited(refresh().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));
       unawaited(syncCalendars(refreshSources: true));
@@ -549,84 +535,51 @@ class CortexModel extends ChangeNotifier {
 
   Future<void> chooseCalendars(Set<String> ids) async {
     await _calendarWork;
-    selectedCalendars = ids;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('calendar.selection.v1', ids.toList());
-    notifyListeners();
-    await syncCalendars();
+    await syncCalendars(selectedIds: ids, refreshSources: true);
   }
 
   Future<void> syncCalendars({
-    bool requestAccess = false,
     bool refreshSources = false,
+    Set<String>? selectedIds,
   }) {
     if (_disposed || !paired) return Future.value();
     if (_calendarWork != null) return _calendarWork!;
-    final work = _syncCalendars(requestAccess, refreshSources);
+    final work = _syncCalendars(refreshSources, selectedIds);
     _calendarWork = work;
     return work.whenComplete(() => _calendarWork = null);
   }
 
-  Future<void> _syncCalendars(bool requestAccess, bool refreshSources) async {
+  Future<void> _syncCalendars(bool force, Set<String>? selectedIds) async {
     calendarSyncing = true;
     notifyListeners();
     try {
-      if (!_calendarLoaded) {
-        final prefs = await SharedPreferences.getInstance();
-        selectedCalendars = prefs
-            .getStringList('calendar.selection.v1')
-            ?.toSet();
-        _calendarLoaded = true;
-      }
-      final value = Map<String, dynamic>.from(
-        await native.invokeMethod('readCalendarSnapshot', {
-              'requestAccess': requestAccess,
-              'refreshSources': refreshSources,
-              if (selectedCalendars != null)
-                'selectedIds': selectedCalendars!.toList(),
-            })
-            as Map,
-      );
-      calendarPermission = value['permission'] as String;
-      calendarError = null;
-      if (!calendarGranted) {
-        calendars = [];
-        _calendarFingerprint = null;
-        return; // Never interpret denied access as deleted events.
-      }
-      calendars = (value['calendars'] as List)
+      // Only the phone's time zone is needed. Calendar access comes from Google.
+      final timeZone = await native.invokeMethod<String>('calendarTimeZone');
+      final value =
+          await api.call('POST', '/v1/google/sync', {
+                'timeZone': ?timeZone,
+                'force': force,
+                if (selectedIds != null)
+                  'selectedIds': selectedIds.toList()..sort(),
+              })
+              as Map;
+      calendarPermission = value['status'] == 'needsLink'
+          ? 'needsLink'
+          : 'granted';
+      calendarError = value['error'] as String?;
+      calendars = (value['calendars'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      if (calendars.isEmpty) {
-        calendarError =
-            'No calendars are available from iOS yet. Check your Calendar accounts below.';
-        _calendarFingerprint = null;
-        return;
-      }
-      final rows = (value['events'] as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-      rows.sort(
-        (a, b) => '${a['calendarId']}/${a['externalId']}/${a['date']}'
-            .compareTo('${b['calendarId']}/${b['externalId']}/${b['date']}'),
-      );
-      final snapshot = {
-        'start': value['start'],
-        'end': value['end'],
-        'events': rows,
-      };
-      final fingerprint = sha256
-          .convert(utf8.encode(jsonEncode(snapshot)))
-          .toString();
-      if (_calendarFingerprint != fingerprint) {
-        await api.call('POST', '/v1/calendars/sync', snapshot);
+      selectedCalendars = (value['selectedIds'] as List?)
+          ?.cast<String>()
+          .toSet();
+      final synced = DateTime.tryParse(value['syncedAt'] as String? ?? '');
+      if (synced != calendarSynced) {
         await refresh();
-        _calendarFingerprint = fingerprint;
+        calendarSynced = synced;
       }
-      calendarSynced = DateTime.now();
     } catch (_) {
-      calendarError =
-          'Calendar sync could not finish. It will retry while Cortex is open.';
+      calendarError = 'Google sync will retry. Your saved events are kept.';
     } finally {
       calendarSyncing = false;
       notifyListeners();
@@ -639,7 +592,6 @@ class CortexModel extends ChangeNotifier {
     _streamGeneration++;
     _refreshTimer?.cancel();
     _servicesTimer?.cancel();
-    _calendarDebounce?.cancel();
     _healthDebounce?.cancel();
     api.close();
     super.dispose();

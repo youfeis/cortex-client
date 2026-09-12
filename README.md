@@ -29,19 +29,18 @@ unknown values remain unknown. Saved memories survive context compaction.
 - Camera and photo library attachments (up to four photos per message).
 - Automatic Apple Health sync after setup: steps, active energy, weight, BP and glucose.
 - A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
-- Automatic calendar sync: the next 30 days from any selected iPhone calendars.
-- A calendar picker groups personal/work calendars by account and shows counts.
-- Calendar permission is requested from Calendars; once granted, refresh runs on
-  launch, resume, EventKit change notifications, and every minute while open.
-- Selection is saved per device. Denied access never deletes mirrored events.
-- Phone Calendar and Health permissions are read-only. Google event changes
-  use separately linked Google accounts and the server Calendar API.
-- This version does not set alarms or run data sync while iOS has suspended
-  or closed Cortex.
+- Google Calendar is the master source: personal/work accounts link in Settings.
+- One calendar selection is stored on the server and shared by all devices.
+- The next 30 days sync every five minutes on the server, including while Cortex
+  is closed; launch/resume, pull-to-refresh and selection changes refresh sooner.
+- Google consent replaces iPhone Calendar permission. EventKit import is removed.
+- Google changes go through chat; Health still uses read-only iPhone permission.
+- Phone alarms and background Health sync while iOS suspends Cortex are not included.
 
-Google accounts must have Calendars enabled in iPhone Settings, and events must
-appear in Apple Calendar. Signing in only inside the Google Calendar app is not
-enough. See [Google's iPhone setup guide](https://support.google.com/calendar/answer/99358?co=GENIE.Platform%3DiOS&hl=en).
+Old iPhone calendar entries stay visible until the first successful Google sync.
+The server archives those old mirrors before replacing them. Sync errors retain
+saved events; they never act as an empty calendar. Shared calendars and shared
+invitations are deduplicated by source identity, not by matching titles.
 
 The app header shows two compact remaining-capacity bars: main-session context
 and Codex weekly quota, with the reset date/time in phone-local time. The main
@@ -151,10 +150,9 @@ Apple does not reveal per-type Health read authorization; “Access requested”
 not a claim that every data type was granted. Change permissions in Apple Health.
 Background execution while iOS suspends the app is not implemented.
 
-Calendar permissions and selection remain native. EventKit refreshes the selected
-accounts automatically while active and on resume. Google Calendar linking in
-Settings additionally lets the server session edit real Google events through
-the official API. This does not change the phone's Apple Calendar account setup.
+Google Calendar uses server OAuth and a shared server-side calendar selection.
+The native bridge supplies only the current IANA time zone, with no EventKit
+permission or event upload. Settings links each personal/work Google account.
 
 ## Avatars
 

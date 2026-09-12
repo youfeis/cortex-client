@@ -41,11 +41,18 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(find.byTooltip('Camera or photo library'), findsOneWidget);
     await tester.pumpAndSettle();
+    await waitFor(find.textContaining('Resets '));
     await binding.takeScreenshot('chat');
     await tester.enterText(
       find.byType(TextField),
       'A draft to keep while I check my progress',
     );
+    await tester.pump(const Duration(seconds: 1));
+    if (find.text('Hide keyboard').evaluate().isNotEmpty) {
+      await binding.takeScreenshot('keyboard');
+      await tester.tap(find.text('Hide keyboard'));
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.text('My space'));
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
@@ -85,9 +92,20 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.text('Time\nmanagement'));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('I’m awake · arrange my day'), findsOneWidget);
+    expect(find.text('To-do list'), findsOneWidget);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('time');
+    await tester.scrollUntilVisible(
+      find.byTooltip('Choose calendars'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byTooltip('Choose calendars'));
+    await tester.pumpAndSettle();
+    expect(find.text('Personal, work, all together.'), findsOneWidget);
+    await binding.takeScreenshot('calendars');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.text('Chat').last);

@@ -4,6 +4,9 @@ import 'cortex.dart';
 import 'main.dart';
 import 'ui.dart';
 import 'fitness_trends.dart';
+import 'calendars.dart';
+import 'todos.dart';
+import 'section_art.dart';
 
 typedef OpenChat = void Function(String prompt, {bool photo});
 
@@ -23,7 +26,7 @@ class SpaceScreen extends StatelessWidget {
         crossAxisCount: 2,
         mainAxisSpacing: 14,
         crossAxisSpacing: 14,
-        childAspectRatio: .78,
+        childAspectRatio: .69,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         children: [
@@ -99,8 +102,20 @@ class SpaceScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 29, color: tap == null ? muted : ink),
-            const Spacer(),
+            if (tap != null)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SectionArt(
+                      fitness: icon == Icons.favorite_border_rounded,
+                    ),
+                  ),
+                ),
+              )
+            else
+              const Spacer(),
             Text(
               title,
               style: TextStyle(
@@ -608,10 +623,7 @@ class TimeScreen extends StatelessWidget {
       final upcoming = blocks
           .where((b) => b['done'] != true && (b['end'] as num) > now)
           .toList();
-      final tasks = model
-          .records('task')
-          .where((e) => e.data['done'] != true)
-          .toList();
+
       return Scaffold(
         appBar: AppBar(title: const Text('Time management')),
         body: RefreshIndicator(
@@ -624,6 +636,7 @@ class TimeScreen extends StatelessWidget {
               titleText('A day you can actually live.'),
               const SizedBox(height: 10),
               caption('Room for what matters. Room to breathe.'),
+              TodoList(model: model, onChat: onChat),
               const SizedBox(height: 24),
               if (plan == null)
                 Panel(
@@ -729,28 +742,6 @@ class TimeScreen extends StatelessWidget {
                   child: const Text('Adjust today’s plan'),
                 ),
               ],
-              sectionHead('Tasks with a deadline'),
-              if (tasks.isEmpty)
-                caption('Tell Cortex a task and when it’s due.'),
-              for (final task in tasks)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Panel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task.data['title'] as String,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 5),
-                        caption(
-                          '${task.data['minutes']} min · due ${task.data['deadline'].toString().replaceAll('T', ' ')}',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               sectionHead('Your routines'),
               if (model.records('routine').isEmpty)
                 caption(
@@ -777,19 +768,32 @@ class TimeScreen extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 22),
+              sectionHead(
+                'Calendar events',
+                trailing: IconButton(
+                  tooltip: 'Choose calendars',
+                  onPressed: () => openCalendars(context, model),
+                  icon: const Icon(Icons.tune, size: 20),
+                ),
+              ),
+              caption(
+                model.calendarSyncing
+                    ? 'Syncing calendars…'
+                    : model.calendarError ??
+                          (model.calendarGranted
+                              ? 'Next 30 days · updates automatically while Cortex is open'
+                              : 'Connect your personal and work calendars.'),
+              ),
+              const SizedBox(height: 12),
+              ...calendarRows(model),
               OutlinedButton.icon(
-                onPressed: () => action(context, () async {
-                  final message = await model.importCalendars();
-                  if (context.mounted) {
-                    notice(context, message);
-                  }
-                }),
+                onPressed: () => openCalendars(context, model),
                 icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                label: const Text('Import iPhone calendars'),
+                label: const Text('Choose calendars'),
               ),
               const SizedBox(height: 10),
               caption(
-                'Imports the next 7 days from calendars on this iPhone. Replan after importing. All-day events are reminders, not blocked hours.',
+                'Calendar changes appear here automatically. Ask Cortex to adjust your day plan when needed.',
               ),
               const SizedBox(height: 20),
               FilledButton.icon(
@@ -803,6 +807,57 @@ class TimeScreen extends StatelessWidget {
       );
     },
   );
+  List<Widget> calendarRows(CortexModel m) {
+    final events =
+        m
+            .records('event')
+            .where(
+              (e) => (e.data['date']?.toString() ?? '').compareTo(day()) >= 0,
+            )
+            .toList()
+          ..sort(
+            (
+              a,
+              b,
+            ) => '${a.data['date']}-${(a.data['start'] as num).toInt().toString().padLeft(4, '0')}'
+                .compareTo(
+                  '${b.data['date']}-${(b.data['start'] as num).toInt().toString().padLeft(4, '0')}',
+                ),
+          );
+    Widget row(Entry e) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              e.data['title']?.toString() ?? 'Calendar event',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            caption(
+              '${e.data['date']} · ${e.data['allDay'] == true ? 'All day' : '${clock((e.data['start'] as num).toInt())} – ${clock((e.data['end'] as num).toInt())}'}',
+            ),
+            if (e.data['calendar'] != null)
+              caption('${e.data['account'] ?? ''} · ${e.data['calendar']}'),
+          ],
+        ),
+      ),
+    );
+    return [
+      if (events.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Text('No upcoming events yet.'),
+        ),
+      for (final e in events.take(5)) row(e),
+      if (events.length > 5)
+        ExpansionTile(
+          title: Text('All ${events.length} event entries'),
+          children: [for (final e in events.skip(5)) row(e)],
+        ),
+    ];
+  }
+
   Widget blockRow(Map<String, dynamic> b) => Padding(
     padding: const EdgeInsets.only(bottom: 13),
     child: Row(
@@ -866,7 +921,7 @@ class TimeScreen extends StatelessWidget {
               0,
               (sum, b) => sum + (b['end'] as num) - (b['start'] as num),
             );
-        if (completed >= (task.data['minutes'] as num)) {
+        if (completed >= ((task.data['minutes'] ?? 25) as num)) {
           await model.save(
             'task',
             {...task.data, 'done': true},

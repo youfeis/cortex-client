@@ -3,7 +3,7 @@
 An iPhone-first Flutter client for the private Cortex personal manager.
 
 Two tabs: **Chat** and **My space**. Chat is one continuous main conversation,
-with photos, steering, stop, context usage, and in-app Codex login. My space
+with photos, steering, stop, context and quota usage, and in-app Codex login. My space
 shows fitness and time-management progress. Most record changes happen through
 chat. Money and personal targets are placeholders.
 
@@ -28,11 +28,31 @@ unknown values remain unknown. Saved memories survive context compaction.
 
 - Camera and photo library attachments (up to four photos per message).
 - Apple Health import: today's shared steps, active energy, weight, BP, and glucose.
-- Calendar import: next seven days from calendars enabled on the phone.
-- Google calendars can be included through the iPhone Calendar account setup.
-- Health and calendar access are requested only when the owner taps Import.
-- Imports are manual and read-only. This version does not write to Google
-  Calendar, set alarms, or run background notifications.
+- A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
+- Automatic calendar sync: the next 30 days from any selected iPhone calendars.
+- A calendar picker groups personal/work calendars by account and shows counts.
+- Calendar permission is requested from Calendars; once granted, refresh runs on
+  launch, resume, EventKit change notifications, and every minute while open.
+- Selection is saved per device. Denied access never deletes mirrored events.
+- Health import remains manual. Calendar and Health access are read-only.
+- This version does not write to Google Calendar, set alarms, or promise sync
+  while iOS has suspended or closed Cortex.
+
+Google accounts must have Calendars enabled in iPhone Settings, and events must
+appear in Apple Calendar. Signing in only inside the Google Calendar app is not
+enough. See [Google's iPhone setup guide](https://support.google.com/calendar/answer/99358?co=GENIE.Platform%3DiOS&hl=en).
+
+The chat header shows quota remaining and reset dates/times in phone-local time.
+Details includes every reported bucket; the same account-wide view is available
+beside Sessions in settings. It refreshes at most once a minute automatically
+and on explicit refresh. Unavailable/expired usage never becomes a fictional
+100% balance. See [Codex account rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
+
+Time management shows pending to-dos by deadline and a collapsed completed list.
+Give Cortex a title and deadline in chat; changes and completion also happen in
+chat. A date-only deadline stays due through the day. If no duration is supplied,
+day planning uses a 25-minute estimate. My space uses accessible vector artwork
+for Time and Fitness; stubs remain plain.
 
 Meals require the owner to review photo estimates through chat. Fitness data
 is real server data; an empty log is not treated as a complete food diary.

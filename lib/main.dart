@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'cortex.dart';
 import 'screens.dart';
+import 'ui.dart';
 
 const ink = Color(0xFF2D4135);
 const muted = Color(0xFF74816C);
@@ -83,6 +84,7 @@ class CortexApp extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
       ),
     ),
+    builder: (context, child) => KeyboardDismissBar(child: child!),
     home: const CortexRoot(),
   );
 }
@@ -111,10 +113,7 @@ class _CortexRootState extends State<CortexRoot> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && model.paired) {
-      model.refresh().catchError((_) {});
-      model.readAccount().catchError((_) {});
-    }
+    model.setForeground(state == AppLifecycleState.resumed);
   }
 
   @override

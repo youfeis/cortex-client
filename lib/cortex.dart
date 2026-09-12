@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const native = MethodChannel('com.miaotutu.cortex/native');
 String day([DateTime? date]) =>
@@ -158,7 +159,19 @@ class CortexModel extends ChangeNotifier {
   Map<String, dynamic> chat = {'status': 'ready'};
   Map<String, dynamic>? account;
   int _streamGeneration = 0;
-  Timer? _refreshTimer;
+  Timer? _refreshTimer, _servicesTimer, _calendarDebounce;
+  Map<String, dynamic>? quota;
+  DateTime? quotaUpdated, _quotaAttempt;
+  bool quotaLoading = false, quotaFailed = false, foreground = true;
+  String calendarPermission = 'unknown';
+  String? calendarError;
+  DateTime? calendarSynced;
+  List<Map<String, dynamic>> calendars = [];
+  Set<String>? selectedCalendars;
+  bool calendarSyncing = false, _calendarLoaded = false;
+  String? _calendarFingerprint;
+  Future<void>? _calendarWork;
+  bool get calendarGranted => calendarPermission == 'granted';
   final Map<String, Future<Uint8List>> _images = {};
   List<Entry> records(String kind) =>
       entries.where((e) => e.kind == kind).toList();
@@ -176,6 +189,7 @@ class CortexModel extends ChangeNotifier {
       await refresh();
       await readAccount();
       startStream();
+      startServices();
     } on ApiException catch (e) {
       if (e.status == 401) {
         paired = false;
@@ -200,6 +214,7 @@ class CortexModel extends ChangeNotifier {
     await refresh();
     await readAccount();
     startStream();
+    startServices();
     notifyListeners();
   }
 
@@ -251,7 +266,76 @@ class CortexModel extends ChangeNotifier {
     account = Map<String, dynamic>.from(
       await api.call('GET', '/v1/account') as Map,
     );
+    if (!loggedIn) {
+      quota = null;
+      quotaUpdated = null;
+      _quotaAttempt = null;
+    } else {
+      unawaited(readQuota());
+    }
     notifyListeners();
+  }
+
+  Future<void> readQuota({bool force = false}) async {
+    if (_disposed || !paired || !loggedIn || quotaLoading) return;
+    final now = DateTime.now();
+    if (!force &&
+        _quotaAttempt != null &&
+        now.difference(_quotaAttempt!) < const Duration(seconds: 60)) {
+      return;
+    }
+    _quotaAttempt = now;
+    quotaLoading = true;
+    notifyListeners();
+    try {
+      final result = Map<String, dynamic>.from(
+        await api.call('GET', '/v1/account/limits') as Map,
+      );
+      if (loggedIn) {
+        quota = result;
+        quotaUpdated = DateTime.now();
+        quotaFailed = false;
+      }
+    } catch (_) {
+      quotaFailed = true;
+    } finally {
+      quotaLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void startServices() {
+    native.setMethodCallHandler((call) async {
+      if (call.method == 'calendarsChanged' &&
+          foreground &&
+          paired &&
+          !_disposed) {
+        _calendarDebounce?.cancel();
+        _calendarDebounce = Timer(
+          const Duration(seconds: 2),
+          () => syncCalendars(),
+        );
+      }
+    });
+    _servicesTimer?.cancel();
+    _servicesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (foreground && paired) {
+        unawaited(readAccount().catchError((_) {}));
+        unawaited(syncCalendars());
+      }
+    });
+    unawaited(syncCalendars(refreshSources: true));
+  }
+
+  void setForeground(bool active) {
+    foreground = active;
+    if (!active) {
+      _calendarDebounce?.cancel();
+    } else if (paired) {
+      unawaited(refresh().catchError((_) {}));
+      unawaited(readAccount().catchError((_) {}));
+      unawaited(syncCalendars(refreshSources: true));
+    }
   }
 
   Future<void> save(
@@ -403,35 +487,90 @@ class CortexModel extends ChangeNotifier {
         : 'Today’s available Health data is updated.';
   }
 
-  Future<String> importCalendars() async {
-    final rows = (await native.invokeMethod('readCalendars') as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final ids = <String>{};
-    final today = day();
-    final end = day(DateTime.now().add(const Duration(days: 7)));
-    for (final row in rows) {
-      final id =
-          'calendar-${sha256.convert(utf8.encode('${row['externalId']}-${row['date']}')).toString().substring(0, 32)}';
-      ids.add(id);
-      await save(
-        'event',
-        {...row, 'source': 'iphoneCalendar'},
-        id: id,
-        reload: false,
-      );
-    }
-    for (final old in records('event')) {
-      final date = old.data['date'] as String? ?? '';
-      if (old.data['source'] == 'iphoneCalendar' &&
-          date.compareTo(today) >= 0 &&
-          date.compareTo(end) < 0 &&
-          !ids.contains(old.id)) {
-        await api.call('DELETE', '/v1/records/${old.id}');
+  Future<void> chooseCalendars(Set<String> ids) async {
+    await _calendarWork;
+    selectedCalendars = ids;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('calendar.selection.v1', ids.toList());
+    notifyListeners();
+    await syncCalendars();
+  }
+
+  Future<void> syncCalendars({
+    bool requestAccess = false,
+    bool refreshSources = false,
+  }) {
+    if (_disposed || !paired) return Future.value();
+    if (_calendarWork != null) return _calendarWork!;
+    final work = _syncCalendars(requestAccess, refreshSources);
+    _calendarWork = work;
+    return work.whenComplete(() => _calendarWork = null);
+  }
+
+  Future<void> _syncCalendars(bool requestAccess, bool refreshSources) async {
+    calendarSyncing = true;
+    notifyListeners();
+    try {
+      if (!_calendarLoaded) {
+        final prefs = await SharedPreferences.getInstance();
+        selectedCalendars = prefs
+            .getStringList('calendar.selection.v1')
+            ?.toSet();
+        _calendarLoaded = true;
       }
+      final value = Map<String, dynamic>.from(
+        await native.invokeMethod('readCalendarSnapshot', {
+              'requestAccess': requestAccess,
+              'refreshSources': refreshSources,
+              if (selectedCalendars != null)
+                'selectedIds': selectedCalendars!.toList(),
+            })
+            as Map,
+      );
+      calendarPermission = value['permission'] as String;
+      calendarError = null;
+      if (!calendarGranted) {
+        calendars = [];
+        _calendarFingerprint = null;
+        return; // Never interpret denied access as deleted events.
+      }
+      calendars = (value['calendars'] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (calendars.isEmpty) {
+        calendarError =
+            'No calendars are available from iOS yet. Check your Calendar accounts below.';
+        _calendarFingerprint = null;
+        return;
+      }
+      final rows = (value['events'] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      rows.sort(
+        (a, b) => '${a['calendarId']}/${a['externalId']}/${a['date']}'
+            .compareTo('${b['calendarId']}/${b['externalId']}/${b['date']}'),
+      );
+      final snapshot = {
+        'start': value['start'],
+        'end': value['end'],
+        'events': rows,
+      };
+      final fingerprint = sha256
+          .convert(utf8.encode(jsonEncode(snapshot)))
+          .toString();
+      if (_calendarFingerprint != fingerprint) {
+        await api.call('POST', '/v1/calendars/sync', snapshot);
+        await refresh();
+        _calendarFingerprint = fingerprint;
+      }
+      calendarSynced = DateTime.now();
+    } catch (_) {
+      calendarError =
+          'Calendar sync could not finish. It will retry while Cortex is open.';
+    } finally {
+      calendarSyncing = false;
+      notifyListeners();
     }
-    await refresh();
-    return '${rows.length} calendar entries imported for the next 7 days.';
   }
 
   @override
@@ -439,6 +578,8 @@ class CortexModel extends ChangeNotifier {
     _disposed = true;
     _streamGeneration++;
     _refreshTimer?.cancel();
+    _servicesTimer?.cancel();
+    _calendarDebounce?.cancel();
     api.close();
     super.dispose();
   }

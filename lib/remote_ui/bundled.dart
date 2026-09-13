@@ -2,7 +2,7 @@
 const bundledLayoutJSON = r'''
 {
   "schema": 1,
-  "revision": "2026-09-13.2",
+  "revision": "2026-09-13.3",
   "pages": {
     "space": {
       "type": "list",
@@ -39,6 +39,10 @@ const bundledLayoutJSON = r'''
             {
               "type": "slot",
               "name": "fitness"
+            },
+            {
+              "type": "slot",
+              "name": "pets"
             },
             {
               "type": "slot",
@@ -212,6 +216,32 @@ const bundledLayoutJSON = r'''
         {
           "type": "slot",
           "name": "content"
+        }
+      ]
+    },
+    "pets": {
+      "type": "list",
+      "padding": 22,
+      "children": [
+        {
+          "type": "slot",
+          "name": "intro"
+        },
+        {
+          "type": "slot",
+          "name": "range"
+        },
+        {
+          "type": "slot",
+          "name": "cookie"
+        },
+        {
+          "type": "slot",
+          "name": "wanwan"
+        },
+        {
+          "type": "slot",
+          "name": "chat"
         }
       ]
     }

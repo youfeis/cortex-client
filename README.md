@@ -260,3 +260,7 @@ Native verification (idle simulator only):
 checks real notification delivery, one shared card, independent offline actions,
 stable task positions, paused/postponed visibility, future-ready visibility,
 foreground restoration and stale-action rejection. Synthetic tasks are removed.
+
+## Pets
+
+My space → Pets shows separate Cookie and Wanwan weight charts with 30-day, 90-day and all-history filters. Every same-day reading is retained, values use two decimal places in kg, and the axis leaves room for small changes. Use the chat links to record or correct a weight; pull down to refresh. The Pets page and My space entry use the existing database-backed remote layout contract with a bundled offline layout. Missing readings remain empty.

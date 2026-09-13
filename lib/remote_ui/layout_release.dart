@@ -3,7 +3,8 @@ import 'package:rfw/formats.dart';
 
 /// Layouts can compose these native capabilities, but cannot add executable code.
 const layoutSlots = <String, Set<String>>{
-  'space': {'time', 'fitness', 'money', 'targets'},
+  'space': {'time', 'fitness', 'pets', 'money', 'targets'},
+  'pets': {'intro', 'range', 'cookie', 'wanwan', 'chat'},
   'fitness': {
     'intro',
     'goal',

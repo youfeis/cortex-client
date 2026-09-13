@@ -46,10 +46,35 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     }
     set { defaults.set(["tasks": tasks, "pending": newValue], forKey: "cortex.focus.envelope") }
   }
-  private var visible: [[String: Any]] {
-    tasks.filter {
-      ["ready", "active", "paused", "postponed"].contains($0["status"] as? String ?? "")
+  private var openTasks: [[String: Any]] {
+    tasks.filter { CortexTaskState(rawValue: $0["status"] as? String ?? "")?.isOpen == true }
+  }
+  private func activation(_ f: [String: Any]) -> Date {
+    Self.date(f["activateAt"]) ?? Self.date(f["scheduledStart"])?.addingTimeInterval(-1800)
+      ?? .distantPast
+  }
+  private func phase(_ f: [String: Any], at now: Date = Date()) -> String {
+    let status = f["status"] as? String ?? ""
+    return status == "pending" && activation(f) <= now ? "ready" : status
+  }
+  private var visible: [[String: Any]] { openTasks.filter { phase($0) != "pending" } }
+  private var pagingTasks: [[String: Any]] {
+    let now = Date()
+    var start = now
+    if #available(iOS 16.2, *),
+      let current = Activity<CortexTaskBoardAttributes>.activities.first(where: {
+        Self.ongoing($0.activityState)
+      })
+    {
+      start = current.attributes.windowStart ?? now
     }
+    return openTasks.filter {
+      phase($0) != "pending" || activation($0) < start.addingTimeInterval(8 * 3600)
+    }
+  }
+  private var lastPage: Int { max(0, (pagingTasks.count - 1) / 2) }
+  private var boardPage: Int {
+    max(0, min(defaults.integer(forKey: "cortex.focus.page"), lastPage))
   }
   private var selected: [String: Any]? {
     let id = defaults.string(forKey: "cortex.focus.selected")
@@ -76,7 +101,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     ])
     if #available(iOS 16.2, *) {
       for activity in Activity<CortexTaskBoardAttributes>.activities
-      where Self.ongoing(activity.activityState) {
+      where Self.ongoing(activity.activityState) || Self.scheduled(activity.activityState) {
         observe(activity)
       }
     }
@@ -182,6 +207,11 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
           merged += self.tasks.filter { blocked.contains($0["id"] as? String ?? "") }
           self.tasks = merged
           try await self.schedule()
+        case "focusPage":
+          guard let page = args["page"] as? Int else {
+            throw CortexNative.failure("Invalid task page.")
+          }
+          try await self.setPage(page)
         case "focusAction": try await self.act(args)
         case "focusAcknowledge":
           let id = args["requestId"] as? String ?? ""
@@ -231,6 +261,26 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       }
     }
   }
+  // Paging is local presentation state: no task edits, outbox entries or server calls.
+  private func setPage(_ page: Int) async throws {
+    defaults.set(max(0, min(page, lastPage)), forKey: "cortex.focus.page")
+    try await schedule()
+  }
+  func showPage(_ page: Int) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      enqueue {
+        do {
+          try await self.setPage(page)
+          continuation.resume()
+        } catch { continuation.resume(throwing: error) }
+      }
+    }
+  }
+  @available(iOS 16.2, *)
+  private func coveredTasks(_ activity: Activity<CortexTaskBoardAttributes>) -> [String] {
+    defaults.stringArray(forKey: "cortex.focus.coverage." + activity.id)
+      ?? activity.content.state.tasks.map { $0.id }
+  }
   private func status() async -> [String: Any] {
     let permission = await center.notificationSettings()
     let requests = await center.pendingNotificationRequests().filter {
@@ -243,14 +293,33 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     var enabled = false
     var liveCount = 0
     var liveID = ""
+    var livePage = 0
+    var livePages = 0
+    var liveTaskIDs: [String] = []
+    var scheduledBoards: [[String: Any]] = []
+    var coveredIDs: [String] = []
     if #available(iOS 16.2, *) {
       let current = Activity<CortexTaskBoardAttributes>.activities.filter {
         Self.ongoing($0.activityState)
       }
+      let all = Activity<CortexTaskBoardAttributes>.activities
+      scheduledBoards = all.filter { Self.scheduled($0.activityState) }.map {
+        [
+          "id": $0.id, "start": $0.attributes.windowStart.map(Self.iso) ?? "",
+          "taskIDs": coveredTasks($0),
+        ]
+      }
+      coveredIDs = all.filter { Self.ongoing($0.activityState) || Self.scheduled($0.activityState) }
+        .flatMap { coveredTasks($0) }
       enabled = ActivityAuthorizationInfo().areActivitiesEnabled
       liveCount = enabled ? current.count : 0
       live = enabled && !current.isEmpty
       liveID = live ? current.first?.id ?? "" : ""
+      if live, let content = current.first?.content.state {
+        livePage = content.pageIndex
+        livePages = content.pageCount
+        liveTaskIDs = content.visibleTasks.map { $0.id }
+      }
     }
     let state: String
     switch permission.authorizationStatus {
@@ -271,17 +340,25 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     return [
       "taskNotifications": taskNotifications,
       "permission": state, "liveEnabled": enabled, "liveActive": live, "liveCount": liveCount,
-      "liveActivityID": liveID,
+      "liveActivityID": liveID, "scheduledBoards": scheduledBoards, "liveCoveredIDs": coveredIDs,
+      "livePage": livePage, "livePages": livePages, "liveTaskIDs": liveTaskIDs,
       "liveState": live
         ? "active"
-        : visible.isEmpty
-          ? "none"
-          : !enabled
-            ? "disabled"
-            : defaults.string(forKey: "cortex.focus.liveState") ?? "missing",
+        : !scheduledBoards.isEmpty
+          ? "scheduled"
+          : openTasks.isEmpty
+            ? "none"
+            : !enabled
+              ? "disabled"
+              : defaults.string(forKey: "cortex.focus.liveState") ?? "missing",
       "notificationCount": requests.count, "deliveredCount": delivered,
       "scheduledThrough": defaults.string(forKey: "cortex.focus.through") ?? "",
-      "focus": selected as Any? ?? NSNull(), "focuses": tasks, "pending": pending,
+      "focus": selected as Any? ?? NSNull(),
+      "focuses": tasks.map { f in
+        var v = f
+        v["status"] = phase(f)
+        return v
+      }, "pending": pending,
       "previewRequest": defaults.dictionary(forKey: "cortex.focus.previewRequest") as Any?
         ?? NSNull(),
       "openRequest": defaults.dictionary(forKey: "cortex.focus.openRequest") as Any? ?? NSNull(),
@@ -298,7 +375,9 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     defaults.removeObject(forKey: "cortex.focus.through")
   }
   private func schedule() async throws {
-    let tracked = visible.filter { ["active", "ready"].contains($0["status"] as? String ?? "") }
+    let tracked = openTasks.filter {
+      ["pending", "active", "ready"].contains($0["status"] as? String ?? "")
+    }
     let taskSignature = tracked.map { "\($0["id"] ?? "").\($0["revision"] ?? 0)" }.sorted().joined(
       separator: "/")
     let quiet = defaults.dictionary(forKey: "cortex.focus.quietHours") as? [String: String] ?? [:]
@@ -335,9 +414,10 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       let now = Date()
       var candidates: [(Date, [String: Any])] = []
       for f in tracked {
-        let ready = f["status"] as? String == "ready"
+        let ready = ["pending", "ready"].contains(f["status"] as? String ?? "")
         guard let anchor = Self.date(f[ready ? "scheduledStart" : "expectedEnd"]) else { continue }
         let interval = TimeInterval((f["intervalMinutes"] as? Int ?? 15) * 60)
+        if ready && activation(f) > now { candidates.append((activation(f), f)) }
         if anchor > now { candidates.append((anchor, f)) }
         var next = anchor.addingTimeInterval(10 * 60)
         if next <= now {
@@ -352,7 +432,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       }
       if allowed {
         for (date, f) in candidates.filter({ awake($0.0) }).sorted(by: { $0.0 < $1.0 }).prefix(40) {
-          let ready = f["status"] as? String == "ready"
+          let ready = ["pending", "ready"].contains(f["status"] as? String ?? "")
           let content = UNMutableNotificationContent()
           content.title =
             ready
@@ -390,61 +470,150 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       for old in Activity<CortexFocusAttributes>.activities {
         await old.end(nil, dismissalPolicy: .immediate)
       }
-      let activities = Activity<CortexTaskBoardAttributes>.activities
-      guard !visible.isEmpty else {
-        for a in activities { await a.end(nil, dismissalPolicy: .immediate) }
-        liveAttempt = nil
-        defaults.set("none", forKey: "cortex.focus.liveState")
-        return
+      await scheduleBoards(through: through)
+      let queued = Activity<CortexTaskBoardAttributes>.activities.filter {
+        Self.scheduled($0.activityState)
       }
-      let selectedID = selected?["id"] as? String ?? ""
-      // Paused/postponed work is still unfinished. Keep it reachable on the card
-      // while only ready/active tasks schedule reminder notifications above.
-      let cardTasks = visible.prefix(8).compactMap { f -> CortexTaskBoardAttributes.TaskItem? in
-        guard let end = Self.date(f["expectedEnd"]), let id = f["id"] as? String else { return nil }
-        let ready = f["status"] as? String == "ready"
-        return .init(
-          id: id, title: String((f["title"] as? String ?? "Task").prefix(80)),
-          status: f["status"] as? String ?? "ready",
-          start: Self.date(f[ready ? "scheduledStart" : "startedAt"]) ?? Date(), end: end,
-          revision: f["revision"] as? Int ?? 0, preview: f["preview"] as? Bool ?? false)
-      }
-      let content = ActivityContent(
-        state: CortexTaskBoardAttributes.ContentState(
-          tasks: cardTasks, selectedID: selectedID, remindersUntil: through),
-        staleDate: through > Date() ? through : nil)
-      let cardSignature = cardTasks.map { "\($0.id).\($0.revision)" }.sorted().joined(
-        separator: "/")
-      let live = activities.first {
-        Self.ongoing($0.activityState)
-      }
-      for a in activities where a.id != live?.id { await a.end(nil, dismissalPolicy: .immediate) }
-      if let live {
-        defaults.set(live.id, forKey: "cortex.focus.liveID")
-        observe(live)
-        if live.content.state != content.state { await live.update(content) }
-        defaults.set("active", forKey: "cortex.focus.liveState")
-      } else if ActivityAuthorizationInfo().areActivitiesEnabled && liveAttempt != cardSignature {
-        // App intents may request while backgrounded; a failed attempt remains retryable.
-        do {
-          // Show the task now, including tasks prepared for later. Scheduling the
-          // Activity itself for the future made it report success while invisible.
-          let created = try Activity.request(
-            attributes: CortexTaskBoardAttributes(id: "cortex-task-board"), content: content,
-            pushType: nil)
-          defaults.set(created.id, forKey: "cortex.focus.liveID")
-          defaults.set("active", forKey: "cortex.focus.liveState")
-          liveAttempt = cardSignature
-          observe(created)
-        } catch {
-          defaults.set("unavailable", forKey: "cortex.focus.liveState")
-          if restoration == nil && UIApplication.shared.applicationState == .active {
-            restoreOnOpen()
-          }
+      let duplicateAlerts = await center.pendingNotificationRequests().filter { request in
+        guard request.identifier.hasPrefix(prefix),
+          let id = request.content.userInfo["focusId"] as? String,
+          let at = (request.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate()
+        else { return false }
+        return queued.contains { board in
+          guard let start = board.attributes.windowStart, abs(start.timeIntervalSince(at)) < 2
+          else { return false }
+          return coveredTasks(board).contains(id)
         }
-      }
+      }.map(\.identifier)
+      center.removePendingNotificationRequests(withIdentifiers: duplicateAlerts)
+
     }
   }
+  @available(iOS 16.2, *)
+  private static func scheduled(_ state: ActivityState) -> Bool {
+    if #available(iOS 26.0, *) { return state == .pending }
+    return false
+  }
+
+  @available(iOS 16.2, *)
+  private func scheduleBoards(through: Date) async {
+    let now = Date()
+    let activities = Activity<CortexTaskBoardAttributes>.activities
+    guard !openTasks.isEmpty else {
+      for a in activities { await a.end(nil, dismissalPolicy: .immediate) }
+      liveAttempt = nil
+      defaults.set(0, forKey: "cortex.focus.page")
+      defaults.set("none", forKey: "cortex.focus.liveState")
+      return
+    }
+    // Once the last available task ends, a future-only schedule must wait for
+    // its activation time instead of inheriting the old visible card.
+    let current = visible.isEmpty ? nil : activities.first { Self.ongoing($0.activityState) }
+    var remaining = openTasks
+    var keep = Set<String>()
+    // Queue a small rolling window. iOS limits both active and scheduled cards;
+    // status reports only accepted requests, and ordinary notifications remain.
+    for group in 0..<3 {
+      guard !remaining.isEmpty else { break }
+      let immediate = remaining.contains { phase($0) != "pending" }
+      let firstActivation = remaining.map { activation($0) }.min() ?? now
+      let at =
+        group == 0 && current != nil
+        ? (current!.attributes.windowStart ?? now)
+        : (immediate ? now : max(now, firstActivation))
+      let end = at.addingTimeInterval(8 * 3600)
+      let candidates = remaining.filter { phase($0) != "pending" || activation($0) < end }
+      let page = group == 0 ? min(boardPage, max(0, (candidates.count - 1) / 2)) : 0
+      let chosen = Array(candidates.dropFirst(page * 2).prefix(2))
+      let consumed = Set(candidates.compactMap { $0["id"] as? String })
+      remaining.removeAll { consumed.contains($0["id"] as? String ?? "") }
+      let key =
+        group == 0 && current != nil
+        ? current!.attributes.id : "board-\(Int(at.timeIntervalSince1970))"
+      let cardTasks = chosen.compactMap { f -> CortexTaskBoardAttributes.TaskItem? in
+        guard let finish = Self.date(f["expectedEnd"]), let id = f["id"] as? String else {
+          return nil
+        }
+        let ready = ["pending", "ready"].contains(f["status"] as? String ?? "")
+        // Keep the two-task payload below ActivityKit's 4 KB budget,
+        // including multilingual titles. The app retains the full title.
+        var title = ""
+        for character in (f["title"] as? String ?? "Task") {
+          if (title + String(character)).utf8.count > 72 { break }
+          title.append(character)
+        }
+        return .init(
+          id: id, title: title, status: phase(f),
+          start: Self.date(f[ready ? "scheduledStart" : "startedAt"]) ?? now,
+          end: finish, revision: f["revision"] as? Int ?? 0,
+          preview: f["preview"] as? Bool ?? false, activateAt: ready ? activation(f) : nil)
+      }
+      guard !cardTasks.isEmpty else { continue }
+      if group == 0 { defaults.set(page, forKey: "cortex.focus.page") }
+      let content = ActivityContent(
+        state: CortexTaskBoardAttributes.ContentState(
+          tasks: cardTasks, selectedID: selected?["id"] as? String ?? cardTasks[0].id,
+          remindersUntil: through, page: page, totalTaskCount: candidates.count), staleDate: end)
+      let match =
+        group == 0 && current != nil
+        ? current
+        : activities.first {
+          $0.attributes.id == key
+            && (Self.ongoing($0.activityState) || Self.scheduled($0.activityState))
+        }
+      if let match {
+        keep.insert(match.id)
+        defaults.set(Array(consumed).sorted(), forKey: "cortex.focus.coverage." + match.id)
+        if match.content.state != content.state { await match.update(content) }
+        observe(match)
+        if Self.ongoing(match.activityState) {
+          defaults.set(match.id, forKey: "cortex.focus.liveID")
+        }
+        continue
+      }
+      guard ActivityAuthorizationInfo().areActivitiesEnabled else { continue }
+      // Retire obsolete pending schedules before requesting replacements, freeing
+      // the OS allowance after a Google event moves or is cancelled.
+      for old in activities
+      where !keep.contains(old.id) && Self.scheduled(old.activityState)
+        && !remaining.contains(where: { f in
+          coveredTasks(old).contains(f["id"] as? String ?? "")
+        })
+      {
+        await old.end(nil, dismissalPolicy: .immediate)
+      }
+      do {
+        let attributes = CortexTaskBoardAttributes(id: key, windowStart: at)
+        let created: Activity<CortexTaskBoardAttributes>
+        if at > now {
+          if #available(iOS 26.0, *) {
+            created = try Activity.request(
+              attributes: attributes, content: content, pushType: nil,
+              style: .standard,
+              alertConfiguration: .init(
+                title: "Your next task",
+                body: "Starts in 30 minutes. Start when you’re ready, or postpone.", sound: .default
+              ), start: at)
+          } else {
+            continue
+          }
+        } else {
+          created = try Activity.request(attributes: attributes, content: content, pushType: nil)
+        }
+        keep.insert(created.id)
+        defaults.set(Array(consumed).sorted(), forKey: "cortex.focus.coverage." + created.id)
+        observe(created)
+        if at <= now { defaults.set(created.id, forKey: "cortex.focus.liveID") }
+        defaults.set(at > now ? "scheduled" : "active", forKey: "cortex.focus.liveState")
+      } catch {
+        defaults.set("unavailable", forKey: "cortex.focus.liveState")
+      }
+    }
+    for old in activities where !keep.contains(old.id) {
+      await old.end(nil, dismissalPolicy: .immediate)
+    }
+  }
+
   private func act(_ args: [String: Any]) async throws {
     var list = tasks
     guard let id = args["id"] as? String,
@@ -453,7 +622,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     else { throw CortexNative.failure("That task has changed. Open Cortex to refresh.") }
     var f = list[index]
     guard args["expectedRevision"] as? Int == f["revision"] as? Int,
-      ["ready", "active", "paused", "postponed"].contains(f["status"] as? String ?? "")
+      CortexTaskState(rawValue: f["status"] as? String ?? "")?.allows(action) == true
     else { throw CortexNative.failure("That task has changed. Open Cortex to refresh.") }
     defaults.set(id, forKey: "cortex.focus.selected")
     if action == "select" {
@@ -506,7 +675,9 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
           1, Int(ceil((Self.date(f["expectedEnd"]) ?? now).timeIntervalSince(now) / 60)))
       }
       f["status"] = "paused"
-    case "complete": f["status"] = "done"
+    case "complete":
+      f["status"] = "done"
+      f["completedAt"] = Self.iso(now)
     case "cancel": f["status"] = "cancelled"
     default: throw CortexNative.failure("Unknown task action.")
     }
@@ -533,7 +704,9 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     func value(_ key: String) -> String? { parts.first { $0.name == key }?.value }
     let action = value("action") ?? "view"
     enqueue {
-      if action == "preview" {
+      if action == "page", let page = value("page").flatMap(Int.init) {
+        try? await self.setPage(page)
+      } else if action == "preview" {
         self.requestPreview()
       } else if action == "postpone" || action == "view" {
         self.defaults.set(

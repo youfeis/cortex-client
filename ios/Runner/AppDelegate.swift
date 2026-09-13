@@ -46,7 +46,7 @@ import HealthKit
             DispatchQueue.main.async { result(FlutterError(code: "device_key", message: error.localizedDescription, details: nil)) }
           }
         }
-      case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge", "focusRestore", "focusPreview", "focusPreviewAcknowledge", "focusOpenAcknowledge":
+      case "focusStatus", "focusPage", "focusPermission", "focusApply", "focusAction", "focusAcknowledge", "focusRestore", "focusPreview", "focusPreviewAcknowledge", "focusOpenAcknowledge":
         CortexFocus.shared.handle(call.method, call.arguments as? [String: Any] ?? [:], result)
 #if targetEnvironment(simulator)
       case "focusTestExpire":

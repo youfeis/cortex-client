@@ -225,11 +225,35 @@ work; silence never marks a task done. Google Calendar changes require planning.
 
 Overlapping tasks share one 160-point native Live Activity. Two columns show
 independent progress and 44-point-high buttons: Start/Done/Resume, the clock-arrow
-Postpone button, Pause and +5/+10/+15 minutes. Titles open task details; an
-overflow link opens additional tasks. Task positions remain stable when the
+Postpone button, Pause and +5/+10/+15 minutes. Titles open task details. With
+more than two tasks, 44-point arrow buttons show the next or previous pair
+without opening Cortex; the left arrow shows the page count. Paging is saved
+locally and never edits timers, revisions or the action history. Task positions remain stable when the
 server returns its latest-edited task first. Paused/postponed tasks remain on
-the card with Resume; only completed/cancelled tasks leave it. Future-ready
-tasks appear immediately instead of being mistaken for a visible pending Activity.
+the card with Resume; only completed/cancelled tasks leave it.
+
+Selected timed Google events and scheduled day-plan to-do blocks automatically
+create durable task occurrences. Planned tasks use pending → ready (30 minutes
+before scheduledStart) → active (explicit Start) → done (explicit completion),
+with paused/postponed/cancelled branches. Starting early is allowed. Rescheduling
+returns to pending/ready. Clock activation never changes the owner-action revision.
+
+On iOS 26, the phone queues standard ActivityKit cards using the scheduled-start
+API, which activates without a running Flutter app. Pending cards are reported as
+scheduled, never as currently visible. Nearby tasks share one board; groups span
+at most eight hours, with three queued boards. Each card carries the displayed
+pair only; its arrows load other tasks from native storage to stay below the
+4 KB payload limit. Later pending tasks remain listed in the app and can receive
+ordinary reminders.
+iOS may accept fewer cards; per-task acknowledgement reports actual coverage.
+The first scheduled card's alert replaces the matching ordinary 30-minute alert.
+Opening Cortex refreshes the next 48 hours, replaces moved/deleted occurrences,
+and replenishes the bounded queue. Calendar changes made after the last phone
+sync need another sync; this release does not claim APNs delivery of new events.
+
+Completed to-dos remain visible and crossed out. Done today uses their persisted
+completion timestamp in the phone's local time. Older/undated completions are
+expanded separately; editing a completed task does not move its completion date.
 
 Reopening Cortex restores cached unfinished tasks before network access succeeds.
 Bounded local retries handle iOS scene activation delays. Activity lifecycle

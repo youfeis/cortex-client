@@ -10,25 +10,26 @@ struct CortexFocusWidget: Widget {
       TaskBoardView(state: context.state)
         .activityBackgroundTint(Color(red: 0.95, green: 0.97, blue: 0.93))
         .activitySystemActionForegroundColor(.black)
-        .widgetURL(taskURL("view", context.state.tasks.first))
+        .widgetURL(taskURL("view", context.state.visibleTasks.first))
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.bottom) { TaskBoardView(state: context.state, dark: true) }
       } compactLeading: {
-        Label("\(context.state.tasks.count)", systemImage: "leaf.fill").font(.caption)
+        Label("\(context.state.taskCount)", systemImage: "leaf.fill").font(.caption)
       } compactTrailing: {
-        if let task = context.state.tasks.first {
-          if task.status == "active" {
+        if let task = context.state.visibleTasks.first {
+          if task.phase == "active" {
             Text(timerInterval: task.start...max(task.start, task.end), countsDown: true)
               .monospacedDigit().frame(width: 45)
           } else {
-            Text(task.status == "ready" ? "Ready" : "Paused").font(.caption)
+            Text(task.phase == "ready" ? "Ready" : task.phase == "pending" ? "Soon" : "Paused")
+              .font(.caption)
           }
         }
       } minimal: {
         Image(systemName: "leaf.fill")
       }
-      .widgetURL(taskURL("view", context.state.tasks.first))
+      .widgetURL(taskURL("view", context.state.visibleTasks.first))
     }
   }
 }
@@ -38,7 +39,7 @@ private struct TaskBoardView: View {
   var dark = false
   private var ink: Color { dark ? .white : Color(red: 0.16, green: 0.29, blue: 0.21) }
   private var displayed: [CortexTaskBoardAttributes.TaskItem] {
-    Array(state.tasks.prefix(2))
+    state.visibleTasks
   }
   private var paired: Bool { displayed.count > 1 }
 
@@ -51,18 +52,7 @@ private struct TaskBoardView: View {
           Rectangle().fill(ink.opacity(0.22)).frame(width: 1)
         }
         VStack(spacing: 5) {
-          HStack(spacing: 4) {
-            Link(destination: taskURL("view", task)) {
-              Text(task.title).font(.system(size: paired ? 16 : 17, weight: .semibold))
-                .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-            }.accessibilityLabel("Open task: \(task.title)")
-            if task.id == displayed.first?.id && state.tasks.count > 2 {
-              Link("+\(state.tasks.count - 2)", destination: taskURL("view", task))
-                .font(.system(size: 14, weight: .semibold))
-                .accessibilityLabel("Show all \(state.tasks.count) tasks in Cortex")
-            }
-          }.frame(height: 20)
-          progress(task)
+          header(task)
           controls(task)
         }.frame(maxWidth: .infinity)
       }
@@ -71,10 +61,58 @@ private struct TaskBoardView: View {
     .frame(height: 160).foregroundStyle(ink)
   }
 
+  private func header(_ task: CortexTaskBoardAttributes.TaskItem) -> some View {
+    HStack(spacing: 4) {
+      if state.pageCount > 1 && task.id == displayed.first?.id { pageArrow(previous: true) }
+      VStack(spacing: 5) {
+        Link(destination: taskURL("view", task)) {
+          Text(task.title).font(.system(size: paired ? 16 : 17, weight: .semibold))
+            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+        }.accessibilityLabel("Open task: \(task.title)").frame(height: 20)
+        progress(task)
+      }.frame(maxWidth: .infinity)
+      if state.pageCount > 1 && task.id == displayed.last?.id { pageArrow(previous: false) }
+    }.frame(height: 45)
+  }
+
+  private func pageArrow(previous: Bool) -> some View {
+    let target = state.pageIndex + (previous ? -1 : 1)
+    let available = target >= 0 && target < state.pageCount
+    return pageButton(target, previous: previous)
+      .disabled(!available).opacity(available ? 1 : 0.35)
+      .accessibilityLabel(previous ? "Previous tasks" : "Next tasks")
+      .accessibilityValue("Page \(state.pageIndex + 1) of \(state.pageCount)")
+  }
+
+  @ViewBuilder private func pageButton(_ target: Int, previous: Bool) -> some View {
+    if #available(iOS 17.0, *) {
+      Button(intent: CortexFocusPageIntent(target)) { pageFace(previous: previous) }
+        .buttonStyle(.plain)
+    } else {
+      Link(destination: URL(string: "cortex://focus?action=page&page=\(target)")!) {
+        pageFace(previous: previous)
+      }
+    }
+  }
+
+  private func pageFace(previous: Bool) -> some View {
+    VStack(spacing: 1) {
+      Image(systemName: previous ? "chevron.left" : "chevron.right")
+        .font(.system(size: 18, weight: .semibold))
+      if previous {
+        Text("\(state.pageIndex + 1)/\(state.pageCount)")
+          .font(.system(size: 11, weight: .medium)).monospacedDigit()
+      }
+    }
+    .frame(width: 44, height: 44)
+    .background(ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    .contentShape(Rectangle())
+  }
+
   private func progress(_ task: CortexTaskBoardAttributes.TaskItem) -> some View {
     ZStack {
       RoundedRectangle(cornerRadius: 5).fill(ink.opacity(0.08))
-      if task.status == "active" {
+      if task.phase == "active" {
         ProgressView(
           timerInterval: task.start...max(task.start.addingTimeInterval(1), task.end),
           countsDown: true
@@ -85,10 +123,12 @@ private struct TaskBoardView: View {
           .accessibilityLabel("Remaining planned time for \(task.title)")
       } else {
         Text(
-          task.status == "ready"
-            ? "Ready to start" : task.status == "postponed" ? "Postponed" : "Paused"
+          task.phase == "ready"
+            ? "Ready to start"
+            : task.phase == "pending"
+              ? "Upcoming" : task.phase == "postponed" ? "Postponed" : "Paused"
         )
-        .accessibilityLabel("\(task.title): \(task.status). Timer is stopped.")
+        .accessibilityLabel("\(task.title): \(task.phase). Timer is stopped.")
       }
     }
     .font(.system(size: 14, weight: .semibold))
@@ -99,27 +139,34 @@ private struct TaskBoardView: View {
     VStack(spacing: 6) {
       HStack(spacing: 6) {
         direct(
-          task.status == "active"
-            ? (paired ? "Done" : "Completed!") : task.status == "ready" ? "Start" : "Resume",
-          task.status == "active" ? "complete" : "begin", task, primary: true)
+          task.phase == "active"
+            ? (paired ? "Done" : "Completed!")
+            : ["pending", "ready"].contains(task.phase) ? "Start" : "Resume",
+          task.phase == "active" ? "complete" : "begin", task, primary: true)
         Link(destination: taskURL("postpone", task)) {
           face("Postpone", symbol: paired ? "clock.arrow.circlepath" : nil)
         }
         .accessibilityLabel("Postpone \(task.title) and give a reason")
-        if task.status == "active" {
+        if task.phase == "active" {
           direct("Pause", "pause", task, symbol: "pause.fill")
         } else {
           Link(destination: taskURL("view", task)) { face("More", symbol: "ellipsis") }
             .accessibilityLabel("More controls for \(task.title)")
         }
       }
-      if task.status == "active" {
+      if task.phase == "active" {
         HStack(spacing: 6) { extensions(task) }
       } else {
-        Text(
-          task.status == "ready"
-            ? "Tap Start when you’re ready." : "Still here. Resume when you’re ready."
-        )
+        Group {
+          if ["pending", "ready"].contains(task.phase) {
+            HStack(spacing: 3) {
+              Text("Planned")
+              Text(task.start, style: .time)
+            }
+          } else {
+            Text("Still here. Resume when you’re ready.")
+          }
+        }
         .font(.system(size: 14)).foregroundStyle(ink.opacity(0.75))
         .lineLimit(2).frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
       }

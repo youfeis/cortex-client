@@ -103,6 +103,25 @@ void main() {
           if ((state['deliveredCount'] as int) > 0) break;
         }
         expect(state['deliveredCount'], greaterThan(0));
+        final previousActivity = state['liveActivityID'];
+        await native.invokeMethod('focusTestExpire');
+        for (var i = 0; i < 8; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(seconds: 1)),
+          );
+          state = await native.invokeMethod<Map>('focusStatus') ?? {};
+          if (state['liveCount'] == 1 &&
+              state['liveActivityID'] != previousActivity)
+            break;
+        }
+        expect(
+          state['liveCount'],
+          1,
+          reason: 'Foreground expiry restores the unfinished card.',
+        );
+        expect(state['liveActivityID'], isNot(previousActivity));
+        expect(item(a['id'])['expectedEnd'], a['expectedEnd']);
+        expect(item(b['id'])['expectedEnd'], b['expectedEnd']);
         await act(a['id'], 'begin');
         expect(item(a['id'])['status'], 'active');
         expect(item(b['id'])['revision'], base);

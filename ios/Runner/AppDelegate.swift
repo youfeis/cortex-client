@@ -48,6 +48,10 @@ import HealthKit
         }
       case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge", "focusRestore", "focusPreview", "focusPreviewAcknowledge", "focusOpenAcknowledge":
         CortexFocus.shared.handle(call.method, call.arguments as? [String: Any] ?? [:], result)
+#if DEBUG
+      case "focusTestExpire":
+        CortexFocus.shared.handle(call.method, [:], result)
+#endif
       case "alarmStatus", "alarmPermission", "alarmApply":
         if #available(iOS 26.0, *) { CortexAlarms.handle(call.method, call.arguments as? [String: Any] ?? [:], result) }
         else { result(["permission": "unavailable", "scheduledIds": [], "status": "failed", "error": "Alarms require iOS 26 or later."]) }

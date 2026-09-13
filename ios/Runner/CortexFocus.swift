@@ -198,6 +198,16 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         case "focusPreviewAcknowledge":
           self.defaults.removeObject(forKey: "cortex.focus.previewRequest")
         case "focusOpenAcknowledge": self.defaults.removeObject(forKey: "cortex.focus.openRequest")
+        #if DEBUG
+          case "focusTestExpire":
+            // Exercise the real ActivityKit lifecycle in simulator integration tests.
+            // This method is not present in signed release builds.
+            if #available(iOS 16.2, *) {
+              for activity in Activity<CortexTaskBoardAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+              }
+            }
+        #endif
         default: break
         }
         result(await self.status())
@@ -231,6 +241,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     var live = false
     var enabled = false
     var liveCount = 0
+    var liveID = ""
     if #available(iOS 16.2, *) {
       let current = Activity<CortexTaskBoardAttributes>.activities.filter {
         Self.ongoing($0.activityState)
@@ -238,6 +249,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       enabled = ActivityAuthorizationInfo().areActivitiesEnabled
       liveCount = enabled ? current.count : 0
       live = enabled && !current.isEmpty
+      liveID = live ? current.first?.id ?? "" : ""
     }
     let state: String
     switch permission.authorizationStatus {
@@ -258,6 +270,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     return [
       "taskNotifications": taskNotifications,
       "permission": state, "liveEnabled": enabled, "liveActive": live, "liveCount": liveCount,
+      "liveActivityID": liveID,
       "liveState": live
         ? "active"
         : visible.isEmpty

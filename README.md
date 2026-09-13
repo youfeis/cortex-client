@@ -35,7 +35,7 @@ unknown values remain unknown. Saved memories survive context compaction.
   is closed; launch/resume, pull-to-refresh and selection changes refresh sooner.
 - Google consent replaces iPhone Calendar permission. EventKit import is removed.
 - Google changes go through chat; Health still uses read-only iPhone permission.
-- Phone alarms and background Health sync while iOS suspends Cortex are not included.
+- Cortex alarms use native AlarmKit. Background Health sync while iOS suspends Cortex is not included.
 
 Old iPhone calendar entries stay visible until the first successful Google sync.
 The server archives those old mirrors before replacing them. Sync errors retain
@@ -51,13 +51,13 @@ in settings. It refreshes at most once a minute automatically
 and on explicit refresh. Unavailable/expired usage never becomes a fictional
 100% balance. See [Codex account rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
 
-Time management shows pending to-dos by deadline and a collapsed completed list.
+Time management separates Due today from other deadlines, with a collapsed completed list. Today follows the phone-local calendar date, including earlier timed deadlines today.
 Give Cortex a title and deadline in chat; changes and completion also happen in
 chat. A date-only deadline stays due through the day. If no duration is supplied,
 day planning uses a 25-minute estimate. My space uses accessible vector artwork
 for Time and Fitness; stubs remain plain.
 
-Meals require the owner to review photo estimates through chat. Fitness data
+Meals can be logged from photos using researched, clearly marked estimates. Fitness data
 is real server data; an empty log is not treated as a complete food diary.
 Apple Health active energy is shown separately from manual exercise to avoid
 adding a second copy of the same workout into the TDEE estimate.
@@ -191,3 +191,25 @@ replacement, stale revisions, the actual alerting state, and cancellation. It
 uses a single fixed test UUID and removes that test alarm in cleanup. Allow the
 system permission prompt on the test simulator; never run this ringing test on
 a user's physical phone without arranging it with them.
+
+## Nutrition and routine checkboxes
+
+Fitness shows daily energy, protein, carbs, fat, saturated fat, fibre, added
+sugar and sodium. Unknown nutrients stay blank; partial totals say how many
+meals are known. Food entries show semantic icons and portion-specific flags,
+with estimates, assumptions and source links in expanded details. General high
+nutrient flags use the [FDA 20% Daily Value guide](https://www.fda.gov/food/nutrition-facts-label/how-understand-and-use-nutrition-facts-label):
+sodium 460 mg, added sugar 10 g, saturated fat 4 g, fibre 5.6 g per shown portion.
+These are label-reading aids, not personal targets or a clinical food score.
+
+Saved food facts is a searchable, paginated library of names and facts, without
+photo storage. A food-photo log describes food eaten; the separate library photo
+action saves facts only. Chat handles portions, corrections and future reuse.
+Food facts and meal history stay separate from permanent personal memories.
+
+Fitness routines show today's checkboxes plus a collapsed Other days section.
+The server matches actual measurements, exact movement routine IDs, and explicit
+chat/checkbox/day-plan completion. Doses never complete from a schedule or meal.
+Source captions explain why a box is checked. A checkbox correction overrides
+auto-matching for that date; tomorrow starts fresh. Off-day rotation checkboxes
+are disabled. Day-plan status uses the same routine completion state.

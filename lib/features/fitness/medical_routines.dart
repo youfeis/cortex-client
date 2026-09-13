@@ -15,6 +15,11 @@ DateTime? nextRoutineDate(Entry r, DateTime now) {
   }
   final days = (r.data['weekdays'] as List? ?? []).cast<int>();
   var date = anchor != null && anchor.isAfter(today) ? anchor : today;
+  final start = DateTime.tryParse(r.data['startDate']?.toString() ?? '');
+  if (start != null) {
+    final startDate = DateTime.utc(start.year, start.month, start.day);
+    if (startDate.isAfter(date)) date = startDate;
+  }
   for (var i = 0; i < 366; i++, date = date.add(const Duration(days: 1))) {
     if (days.isNotEmpty && !days.contains(date.weekday)) continue;
     if (anchor != null &&
@@ -66,47 +71,114 @@ String routineWhen(Entry r, {DateTime? now}) {
   return 'Every $interval weeks · $label$due';
 }
 
-class MedicalRoutines extends StatelessWidget {
+class MedicalRoutines extends StatefulWidget {
   final CortexModel model;
   const MedicalRoutines({super.key, required this.model});
+  @override
+  State<MedicalRoutines> createState() => _MedicalRoutinesState();
+}
+
+class _MedicalRoutinesState extends State<MedicalRoutines> {
+  final pending = <String>{};
+  CortexModel get model => widget.model;
+  Future<void> toggle(Entry routine, bool done) async {
+    setState(() => pending.add(routine.id));
+    await action(context, () async {
+      await model.api.call('POST', '/v1/routines/complete', {
+        'routineId': routine.id,
+        'date': day(),
+        'done': done,
+      });
+      await model.refresh();
+    });
+    if (mounted) setState(() => pending.remove(routine.id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows =
         model
             .records('routine')
             .where(
-              (r) => r.data['medical'] == true && r.data['enabled'] != false,
+              (r) =>
+                  r.data['enabled'] != false &&
+                  (r.data['medical'] == true ||
+                      r.data['kind'] == 'movement' ||
+                      r.data['fitness'] == true ||
+                      r.id == 'routine-daily-voice-feminization'),
             )
             .toList()
           ..sort((a, b) => routineWhen(a).compareTo(routineWhen(b)));
     if (rows.isEmpty) return const SizedBox.shrink();
+    Map state(Entry r) {
+      final value = model.routineStates[r.id];
+      return value is Map && value['date'] == day() ? value : {};
+    }
+
+    final today = rows.where((r) => state(r)['due'] == true).toList();
+    final upcoming = rows.where((r) => state(r)['due'] != true).toList();
+    Widget row(Entry r) {
+      final value = state(r);
+      final due = value['due'] == true;
+      final done = value['done'] == true;
+      final source = switch (value['source']) {
+        'record' => 'Checked from a matching record',
+        'plan' => 'Done · day plan',
+        'chat' => done ? 'Done · reported in chat' : 'Unchecked in chat',
+        'checkbox' => done ? 'Done · checked by you' : 'Unchecked by you',
+        _ => '',
+      };
+      return CheckboxListTile(
+        key: ValueKey(r.id),
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: done,
+        onChanged: due && !pending.contains(r.id) && model.online
+            ? (v) => toggle(r, v ?? false)
+            : null,
+        title: Text(
+          r.data['title'] as String,
+          style: const TextStyle(fontSize: 14),
+        ),
+        subtitle: Text(
+          source.isNotEmpty ? '${routineWhen(r)}\n$source' : routineWhen(r),
+        ),
+        secondary: pending.contains(r.id)
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : null,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        sectionHead('Medical routines'),
+        sectionHead(
+          'Fitness routines',
+          trailing: Text(
+            '${today.where((r) => state(r)['done'] == true).length}/${today.length} today',
+            style: const TextStyle(fontSize: 12, color: muted),
+          ),
+        ),
         Panel(
           child: Column(
             children: [
-              for (final r in rows)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.medical_services_outlined,
-                    color: muted,
-                    size: 21,
-                  ),
-                  title: Text(
-                    r.data['title'] as String,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  subtitle: Text(routineWhen(r)),
+              for (final r in today) row(r),
+              if (upcoming.isNotEmpty)
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Other days'),
+                  children: [for (final r in upcoming) row(r)],
                 ),
             ],
           ),
         ),
         const SizedBox(height: 10),
         caption(
-          'From your health records. Tell Cortex when a routine changes or when you have done it.',
+          'Matching records check these automatically. Tell Cortex when you finish, or tap a box. Doses need your confirmation.',
         ),
       ],
     );

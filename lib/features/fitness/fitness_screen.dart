@@ -1,3 +1,4 @@
+import 'nutrition.dart';
 import 'medical_routines.dart';
 import 'health_access.dart';
 import '../../remote_ui/remote_layout.dart';
@@ -316,14 +317,14 @@ class FitnessScreen extends StatelessWidget {
                           width: double.infinity,
                           child: FilledButton.icon(
                             onPressed: () => onChat(
-                              'Please estimate this meal. Let me check the estimate before you record it.',
+                              'This is what I ate. Infer the food and nutrition, research and estimate missing values, save reusable food facts, and record my portion.',
                               photo: true,
                             ),
                             icon: const Icon(
                               Icons.add_a_photo_outlined,
                               size: 20,
                             ),
-                            label: const Text('Take a food photo'),
+                            label: const Text('Log food from a photo'),
                           ),
                         ),
                       ],
@@ -438,30 +439,10 @@ class FitnessScreen extends StatelessWidget {
                         MedicalRoutines(model: model),
                       ],
                     ),
-                    'meals': Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        sectionHead('Food today'),
-                        if (meals.isEmpty)
-                          caption('Send a photo or tell Cortex what you ate.'),
-                        for (final meal in meals)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Panel(
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(meal.data['title'] as String),
-                                  ),
-                                  Text(
-                                    '${meal.data['kcal']} kcal',
-                                    style: const TextStyle(color: muted),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
+                    'meals': FoodToday(
+                      model: model,
+                      meals: meals,
+                      onChat: onChat,
                     ),
                     'readings': Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

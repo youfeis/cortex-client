@@ -32,6 +32,12 @@ class TimeScreen extends StatelessWidget {
       final blocks = ((plan?.data['blocks'] ?? []) as List)
           .map((b) => Map<String, dynamic>.from(b as Map))
           .toList();
+      for (final b in blocks) {
+        final state = model.routineStates[b['id']];
+        if (state is Map && state['date'] == day()) {
+          b['done'] = state['done'] == true;
+        }
+      }
       final now = DateTime.now().hour * 60 + DateTime.now().minute;
       final upcoming = blocks
           .where((b) => b['done'] != true && (b['end'] as num) > now)
@@ -353,6 +359,13 @@ class TimeScreen extends StatelessWidget {
     List<Map<String, dynamic>> blocks,
     Map<String, dynamic> target,
   ) => action(context, () async {
+    if (model.records('routine').any((r) => r.id == target['id'])) {
+      await model.api.call('POST', '/v1/routines/complete', {
+        'routineId': target['id'],
+        'date': plan.data['date'],
+        'done': true,
+      });
+    }
     for (final b in blocks) {
       if (b['id'] == target['id']) {
         b['done'] = true;

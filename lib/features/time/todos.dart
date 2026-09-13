@@ -11,14 +11,23 @@ DateTime? todoDeadline(Entry task) {
   if (date == null) return null;
   return value.length == 10
       ? DateTime(date.year, date.month, date.day + 1)
-      : date;
+      : date.toLocal();
+}
+
+bool todoIsDueToday(Entry task, DateTime now) {
+  final value = task.data['deadline']?.toString() ?? '';
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return false;
+  final date = value.length == 10 ? parsed : parsed.toLocal();
+  return day(date) == day(now);
 }
 
 String todoDueLabel(Entry task, DateTime now) {
   final value = task.data['deadline']?.toString() ?? '';
   final end = todoDeadline(task);
   if (end == null) return 'Deadline needed';
-  final date = DateTime.parse(value);
+  final parsed = DateTime.parse(value);
+  final date = value.length == 10 ? parsed : parsed.toLocal();
   final text = value.length == 10
       ? localDateTime(date).split(',').first
       : localDateTime(date);
@@ -45,6 +54,8 @@ class TodoList extends StatelessWidget {
     final pending = tasks.where((t) => t.data['done'] != true).toList();
     final completed = tasks.where((t) => t.data['done'] == true).toList();
     final now = DateTime.now();
+    final today = pending.where((t) => todoIsDueToday(t, now)).toList();
+    final other = pending.where((t) => !todoIsDueToday(t, now)).toList();
     Widget row(Entry task) => Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Panel(
@@ -105,13 +116,14 @@ class TodoList extends StatelessWidget {
           'Tell Cortex the item and deadline. Ask in chat to change it or mark it done.',
         ),
         const SizedBox(height: 12),
-        if (pending.isEmpty)
+        sectionHead('Due today', trailing: Text('${today.length}')),
+        if (today.isEmpty)
           const Panel(
-            child: Text(
-              'Nothing waiting here. One less thing to hold in your head.',
-            ),
+            child: Text('Nothing due today. A little breathing room.'),
           ),
-        for (final task in pending) row(task),
+        for (final task in today) row(task),
+        if (other.isNotEmpty) sectionHead('Other deadlines'),
+        for (final task in other) row(task),
         if (completed.isNotEmpty)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,

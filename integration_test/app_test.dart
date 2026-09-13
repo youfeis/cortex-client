@@ -64,6 +64,30 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('fitness');
+    await tester.scrollUntilVisible(
+      find.text('Saved food facts'),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('nutrition-today');
+    await tester.tap(find.text('Saved food facts'));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('Add food facts from a photo'), findsOneWidget);
+    expect(find.textContaining('Could not load foods'), findsNothing);
+    await binding.takeScreenshot('food-library');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Fitness routines'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('routine-checkboxes');
+    expect(find.byType(CheckboxListTile), findsWidgets);
+    expect(tester.takeException(), isNull);
     await tester.tap(find.text('Trends'));
     await tester.pumpAndSettle();
     expect(find.text('See the bigger picture.'), findsOneWidget);
@@ -94,6 +118,7 @@ void main() {
     await tester.tap(find.text('Time\nmanagement'));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('To-do list'), findsOneWidget);
+    expect(find.text('Due today'), findsOneWidget);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('time');
     await tester.scrollUntilVisible(

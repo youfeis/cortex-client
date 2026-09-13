@@ -2,7 +2,7 @@
 const bundledLayoutJSON = r'''
 {
   "schema": 1,
-  "revision": "2026-09-13.1",
+  "revision": "2026-09-13.2",
   "pages": {
     "space": {
       "type": "list",
@@ -91,6 +91,10 @@ const bundledLayoutJSON = r'''
         },
         {
           "type": "slot",
+          "name": "meals"
+        },
+        {
+          "type": "slot",
           "name": "checkIn"
         },
         {
@@ -100,10 +104,6 @@ const bundledLayoutJSON = r'''
         {
           "type": "slot",
           "name": "health"
-        },
-        {
-          "type": "slot",
-          "name": "meals"
         },
         {
           "type": "slot",

@@ -174,6 +174,7 @@ class CortexModel extends ChangeNotifier {
   List<Entry> entries = [];
   List<Map<String, dynamic>> messages = [];
   List<Map<String, dynamic>> sessions = [];
+  Map<String, dynamic> routineStates = {};
   Map<String, dynamic> chat = {'status': 'ready'};
   Map<String, dynamic>? account;
   int _streamGeneration = 0;
@@ -251,7 +252,10 @@ class CortexModel extends ChangeNotifier {
     }
     refreshing = true;
     try {
-      final value = await api.call('GET', '/v1/snapshot') as Map;
+      final value = await api.call('GET', '/v1/snapshot?date=${day()}') as Map;
+      routineStates = Map<String, dynamic>.from(
+        value['routineStates'] as Map? ?? {},
+      );
       await memoryNotices.receive(value['records'] as List);
       entries = (value['records'] as List)
           .map((e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)))

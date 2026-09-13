@@ -29,6 +29,11 @@ struct CortexTaskBoardAttributes: ActivityAttributes {
       status == "pending" && (activateAt ?? start.addingTimeInterval(-1800)) <= Date()
         ? "ready" : status
     }
+    var isAvailable: Bool {
+      CortexTaskState(rawValue: status)?.isAvailable(
+        at: Date(), activateAt: activateAt ?? start.addingTimeInterval(-1800),
+        startedAt: start) == true
+    }
   }
   struct ContentState: Codable, Hashable {
     var tasks: [TaskItem]
@@ -39,11 +44,12 @@ struct CortexTaskBoardAttributes: ActivityAttributes {
     // New cards carry only the displayed pair. The remaining tasks stay in the
     // native cache, so calendar schedules do not hit ActivityKit's 4 KB limit.
     var totalTaskCount: Int? = nil
-    var taskCount: Int { totalTaskCount ?? tasks.count }
+    var taskCount: Int { totalTaskCount ?? tasks.filter { $0.isAvailable }.count }
     var pageCount: Int { max(1, (taskCount + 1) / 2) }
     var pageIndex: Int { max(0, min(page ?? 0, pageCount - 1)) }
     var visibleTasks: [TaskItem] {
-      totalTaskCount == nil ? Array(tasks.dropFirst(pageIndex * 2).prefix(2)) : tasks
+      let available = tasks.filter { $0.isAvailable }
+      return totalTaskCount == nil ? Array(available.dropFirst(pageIndex * 2).prefix(2)) : available
     }
   }
   var id: String
@@ -55,6 +61,15 @@ struct CortexTaskBoardAttributes: ActivityAttributes {
 enum CortexTaskState: String {
   case pending, ready, active, paused, postponed, done, cancelled
   var isOpen: Bool { self != .done && self != .cancelled }
+  func isAvailable(at now: Date, activateAt: Date?, startedAt: Date?) -> Bool {
+    switch self {
+    case .active: return true
+    case .pending: return activateAt.map { $0 <= now } ?? false
+    case .ready: return activateAt.map { $0 <= now } ?? true
+    case .paused, .postponed: return startedAt.map { $0.timeIntervalSince1970 > 0 } ?? false
+    case .done, .cancelled: return false
+    }
+  }
   func allows(_ action: String) -> Bool {
     switch action {
     case "begin": return [.pending, .ready, .paused, .postponed].contains(self)

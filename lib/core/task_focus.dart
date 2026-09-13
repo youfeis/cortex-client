@@ -2,6 +2,28 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'cortex.dart';
 
+DateTime? _focusDate(Object? value) {
+  final date = DateTime.tryParse(value?.toString() ?? '');
+  return date != null && date.year > 1970 ? date : null;
+}
+
+String focusTaskPhase(Map<String, dynamic> task, DateTime now) {
+  final status = task['status'] as String? ?? '';
+  if (status != 'pending' && status != 'ready') return status;
+  final activation =
+      _focusDate(task['activateAt']) ??
+      _focusDate(task['scheduledStart'])?.subtract(const Duration(minutes: 30));
+  if (activation == null) return status;
+  return activation.isAfter(now) ? 'pending' : 'ready';
+}
+
+bool focusTaskVisibleAt(Map<String, dynamic> task, DateTime now) =>
+    switch (focusTaskPhase(task, now)) {
+      'ready' || 'active' => true,
+      'paused' || 'postponed' => _focusDate(task['startedAt']) != null,
+      _ => false,
+    };
+
 class TaskFocus {
   TaskFocus({
     required this.api,
@@ -24,18 +46,14 @@ class TaskFocus {
   DateTime? checked;
   Future<void>? _work;
   bool _syncAgain = false;
-  List<Map<String, dynamic>> get visibleTasks =>
-      (tasks.isEmpty && current != null ? [current!] : tasks)
-          .where(
-            (f) => [
-              'pending',
-              'ready',
-              'active',
-              'paused',
-              'postponed',
-            ].contains(f['status']),
-          )
-          .toList();
+  List<Map<String, dynamic>> get visibleTasks {
+    final now = DateTime.now();
+    return (tasks.isEmpty && current != null ? [current!] : tasks)
+        .where((f) => focusTaskVisibleAt(f, now))
+        .map((f) => {...f, 'status': focusTaskPhase(f, now)})
+        .toList();
+  }
+
   bool get visible => visibleTasks.isNotEmpty;
   bool get active => current?['status'] == 'active';
 

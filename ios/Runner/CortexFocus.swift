@@ -49,29 +49,27 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
   private var openTasks: [[String: Any]] {
     tasks.filter { CortexTaskState(rawValue: $0["status"] as? String ?? "")?.isOpen == true }
   }
-  private func activation(_ f: [String: Any]) -> Date {
-    Self.date(f["activateAt"]) ?? Self.date(f["scheduledStart"])?.addingTimeInterval(-1800)
-      ?? .distantPast
+  private func plannedActivation(_ f: [String: Any]) -> Date? {
+    if let date = Self.date(f["activateAt"]), date.timeIntervalSince1970 > 0 { return date }
+    if let date = Self.date(f["scheduledStart"]), date.timeIntervalSince1970 > 0 {
+      return date.addingTimeInterval(-1800)
+    }
+    return nil
   }
+  private func activation(_ f: [String: Any]) -> Date { plannedActivation(f) ?? .distantPast }
   private func phase(_ f: [String: Any], at now: Date = Date()) -> String {
     let status = f["status"] as? String ?? ""
-    return status == "pending" && activation(f) <= now ? "ready" : status
-  }
-  private var visible: [[String: Any]] { openTasks.filter { phase($0) != "pending" } }
-  private var pagingTasks: [[String: Any]] {
-    let now = Date()
-    var start = now
-    if #available(iOS 16.2, *),
-      let current = Activity<CortexTaskBoardAttributes>.activities.first(where: {
-        Self.ongoing($0.activityState)
-      })
-    {
-      start = current.attributes.windowStart ?? now
+    guard ["pending", "ready"].contains(status), let activation = plannedActivation(f) else {
+      return status
     }
-    return openTasks.filter {
-      phase($0) != "pending" || activation($0) < start.addingTimeInterval(8 * 3600)
-    }
+    return activation <= now ? "ready" : "pending"
   }
+  private func isAvailable(_ task: [String: Any], at now: Date = Date()) -> Bool {
+    CortexTaskState(rawValue: task["status"] as? String ?? "")?.isAvailable(
+      at: now, activateAt: plannedActivation(task), startedAt: Self.date(task["startedAt"])) == true
+  }
+  private var visible: [[String: Any]] { openTasks.filter { isAvailable($0) } }
+  private var pagingTasks: [[String: Any]] { visible }
   private var lastPage: Int { max(0, (pagingTasks.count - 1) / 2) }
   private var boardPage: Int {
     max(0, min(defaults.integer(forKey: "cortex.focus.page"), lastPage))
@@ -509,13 +507,15 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     // Once the last available task ends, a future-only schedule must wait for
     // its activation time instead of inheriting the old visible card.
     let current = visible.isEmpty ? nil : activities.first { Self.ongoing($0.activityState) }
-    var remaining = openTasks
+    var remaining = openTasks.filter {
+      ["pending", "ready"].contains($0["status"] as? String ?? "") || isAvailable($0, at: now)
+    }
     var keep = Set<String>()
     // Queue a small rolling window. iOS limits both active and scheduled cards;
     // status reports only accepted requests, and ordinary notifications remain.
     for group in 0..<3 {
       guard !remaining.isEmpty else { break }
-      let immediate = remaining.contains { phase($0) != "pending" }
+      let immediate = remaining.contains { isAvailable($0, at: now) }
       let firstActivation = remaining.map { activation($0) }.min() ?? now
       let at =
         group == 0 && current != nil
@@ -523,8 +523,11 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         : (immediate ? now : max(now, firstActivation))
       let end = at.addingTimeInterval(8 * 3600)
       let candidates = remaining.filter { phase($0) != "pending" || activation($0) < end }
-      let page = group == 0 ? min(boardPage, max(0, (candidates.count - 1) / 2)) : 0
-      let chosen = Array(candidates.dropFirst(page * 2).prefix(2))
+      // Cache the scheduling window, but only put available work on its card.
+      // Future-only cards show the tasks due when that scheduled card starts.
+      let available = candidates.filter { isAvailable($0, at: max(now, at)) }
+      let page = group == 0 ? min(boardPage, max(0, (available.count - 1) / 2)) : 0
+      let chosen = Array(available.dropFirst(page * 2).prefix(2))
       let consumed = Set(candidates.compactMap { $0["id"] as? String })
       remaining.removeAll { consumed.contains($0["id"] as? String ?? "") }
       let key =
@@ -553,7 +556,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       let content = ActivityContent(
         state: CortexTaskBoardAttributes.ContentState(
           tasks: cardTasks, selectedID: selected?["id"] as? String ?? cardTasks[0].id,
-          remindersUntil: through, page: page, totalTaskCount: candidates.count), staleDate: end)
+          remindersUntil: through, page: page, totalTaskCount: available.count), staleDate: end)
       let match =
         group == 0 && current != nil
         ? current

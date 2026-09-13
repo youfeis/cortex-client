@@ -213,7 +213,7 @@ class _FocusPanelState extends State<FocusPanel> {
         : waiting
         ? 'Pending · card activates ${activation == null ? '30 min before start' : clock(activation.hour * 60 + activation.minute)}. Planned ${planned == null ? '' : clock(planned.hour * 60 + planned.minute)}.'
         : ready
-        ? 'Ready when you are. Tap “I’ve started”.'
+        ? '${planned == null ? 'Ready when you are' : 'Planned ${clock(planned.hour * 60 + planned.minute)}'}. Tap “I’ve started”.'
         : status == 'postponed'
         ? (item['preview'] == true
               ? 'Preview postponed · your real plan is unchanged.'

@@ -11,16 +11,23 @@ import 'todos.dart';
 
 import '../../core/navigation.dart';
 
+String planClock(int minute) =>
+    '${clock(minute % 1440)}${minute >= 1440 ? ' +1 day' : ''}';
+
 class TimeScreen extends StatelessWidget {
   final CortexModel model;
   final OpenChat onChat;
   const TimeScreen({super.key, required this.model, required this.onChat});
-  Future<void> checkIn(BuildContext context) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (_) => CheckIn(model: model),
-  );
+  Future<void> checkIn(BuildContext context) async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => CheckIn(model: model),
+    );
+    if (sent == true && context.mounted) onChat('');
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: model,
@@ -39,7 +46,7 @@ class TimeScreen extends StatelessWidget {
             .any((t) => t.id == b['taskId'] && t.data['done'] == true)) {
           b['done'] = true;
         }
-        final state = model.routineStates[b['id']];
+        final state = model.routineStates[b['routineId'] ?? b['id']];
         if (state is Map && state['date'] == day()) {
           b['done'] = state['done'] == true;
         }
@@ -110,6 +117,13 @@ class TimeScreen extends StatelessWidget {
                       ),
                     )
                   else ...[
+                    if (plan.data['calendarStatus'] == 'publishing')
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          'Saving your day to Google Calendar… Check chat for progress.',
+                        ),
+                      ),
                     if (upcoming.isNotEmpty)
                       Panel(
                         color: soft,
@@ -128,45 +142,15 @@ class TimeScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             caption(
-                              '${clock((upcoming.first['start'] as num).toInt())} – ${clock((upcoming.first['end'] as num).toInt())}',
+                              '${planClock((upcoming.first['start'] as num).toInt())} – ${planClock((upcoming.first['end'] as num).toInt())}',
                             ),
                             const SizedBox(height: 20),
-                            if (!model.taskFocus.visible)
-                              FilledButton.icon(
-                                onPressed: () => action(
-                                  context,
-                                  () => model.taskFocus.start(
-                                    title: upcoming.first['title'] as String,
-                                    taskId:
-                                        model
-                                            .records('task')
-                                            .any(
-                                              (t) =>
-                                                  t.id ==
-                                                  upcoming.first['taskId'],
-                                            )
-                                        ? upcoming.first['taskId'] as String
-                                        : null,
-                                    expectedEnd: DateTime.now()
-                                        .copyWith(
-                                          hour: 0,
-                                          minute: 0,
-                                          second: 0,
-                                          millisecond: 0,
-                                          microsecond: 0,
-                                        )
-                                        .add(
-                                          Duration(
-                                            minutes:
-                                                (upcoming.first['end'] as num)
-                                                    .toInt(),
-                                          ),
-                                        ),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.play_arrow),
-                                label: const Text('Start this task'),
-                              ),
+                            FilledButton.icon(
+                              onPressed: () =>
+                                  startBlock(context, upcoming.first),
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('Start this task'),
+                            ),
                             FilledButton.icon(
                               onPressed: () => complete(
                                 context,
@@ -216,7 +200,8 @@ class TimeScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: () => checkIn(context),
+                      onPressed: () =>
+                          onChat('I’d like to adjust today’s calendar. '),
                       child: const Text('Adjust today’s plan'),
                     ),
                   ],
@@ -289,7 +274,7 @@ class TimeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   caption(
-                    'Google Calendar changes appear here automatically. Ask Cortex to adjust your day plan when needed.',
+                    'Google Calendar holds your planned times. Falling behind won’t move them. Ask Cortex when you want a change.',
                   ),
                 ],
               ),
@@ -338,7 +323,7 @@ class TimeScreen extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             caption(
-              '${e.data['date']} · ${e.data['allDay'] == true ? 'All day' : '${clock((e.data['start'] as num).toInt())} – ${clock((e.data['end'] as num).toInt())}'}',
+              '${e.data['date']} · ${e.data['allDay'] == true ? 'All day' : '${planClock((e.data['start'] as num).toInt())} – ${planClock((e.data['end'] as num).toInt())}'}',
             ),
             if (e.data['calendar'] != null)
               caption('${e.data['account'] ?? ''} · ${e.data['calendar']}'),
@@ -366,7 +351,10 @@ class TimeScreen extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(width: 55, child: caption(clock((b['start'] as num).toInt()))),
+        SizedBox(
+          width: 64,
+          child: caption(planClock((b['start'] as num).toInt())),
+        ),
         Container(
           width: 3,
           height: 38,
@@ -396,50 +384,67 @@ class TimeScreen extends StatelessWidget {
       ],
     ),
   );
+  Map<String, dynamic>? timerFor(Map<String, dynamic> block) {
+    final calendarKey = block['calendarId'] != null && block['eventId'] != null
+        ? 'google:${block['calendarId']}\n${block['eventId']}'
+        : null;
+    return model.taskFocus.tasks
+        .where(
+          (f) => calendarKey != null
+              ? f['calendarKey'] == calendarKey
+              : block['taskId'] != null && f['taskId'] == block['taskId'],
+        )
+        .firstOrNull;
+  }
+
+  Future<void> startBlock(
+    BuildContext context,
+    Map<String, dynamic> block,
+  ) => action(context, () async {
+    final timer = timerFor(block);
+    if (timer != null) {
+      if (timer['status'] != 'active') {
+        await model.taskFocus.act('begin', id: timer['id'] as String);
+      }
+      return;
+    }
+    onChat(
+      'I’m starting "${block['title']}" now. Use its existing calendar event; keep the planned times.',
+    );
+  });
+
   Future<void> complete(
     BuildContext context,
     Entry plan,
     List<Map<String, dynamic>> blocks,
     Map<String, dynamic> target,
   ) => action(context, () async {
-    if (model.records('routine').any((r) => r.id == target['id'])) {
+    final timer = timerFor(target);
+    final routineId = target['routineId'] ?? target['id'];
+    final task = model
+        .records('task')
+        .where((t) => t.id == target['taskId'])
+        .firstOrNull;
+    if (timer != null && timer['status'] != 'done') {
+      await model.taskFocus.act('complete', id: timer['id'] as String);
+    } else if (task != null) {
+      await model.save(
+        'task',
+        {...task.data, 'done': true},
+        id: task.id,
+        reload: false,
+      );
+    }
+    if (model.records('routine').any((r) => r.id == routineId)) {
       await model.api.call('POST', '/v1/routines/complete', {
-        'routineId': target['id'],
+        'routineId': routineId,
         'date': plan.data['date'],
         'done': true,
       });
-    }
-    for (final b in blocks) {
-      if (b['id'] == target['id']) {
-        b['done'] = true;
-      }
-    }
-    await model.save(
-      'plan',
-      {...plan.data, 'blocks': blocks},
-      id: plan.id,
-      reload: false,
-    );
-    final taskId = target['taskId'];
-    if (taskId != null) {
-      final tasks = model.records('task').where((t) => t.id == taskId);
-      if (tasks.isNotEmpty) {
-        final task = tasks.first;
-        final completed = blocks
-            .where((b) => b['taskId'] == taskId && b['done'] == true)
-            .fold<num>(
-              0,
-              (sum, b) => sum + (b['end'] as num) - (b['start'] as num),
-            );
-        if (completed >= ((task.data['minutes'] ?? 25) as num)) {
-          await model.save(
-            'task',
-            {...task.data, 'done': true},
-            id: task.id,
-            reload: false,
-          );
-        }
-      }
+    } else if (timer == null && task == null) {
+      onChat(
+        'I completed "${target['title']}". Mark its calendar task done and keep the planned times.',
+      );
     }
     await model.refresh();
   });
@@ -463,35 +468,6 @@ class _CheckInState extends State<CheckIn> {
       error = null;
     });
     try {
-      if (!widget.model
-          .records('routine')
-          .any((r) => r.id.startsWith('routine-'))) {
-        final defaults = [
-          ('Slow start & breakfast', 30, 0, 'routine'),
-          if (!widget.model.records('routine').any((r) => r.id == 'medical-bp'))
-            ('Weight & blood pressure', 10, 1, 'routine'),
-          ('Lunch, away from the screen', 45, 750, 'routine'),
-          ('Get outside for a walk', 25, 930, 'movement'),
-          ('Something just for you', 45, 990, 'rest'),
-          ('Dinner & time to unwind', 45, 1170, 'routine'),
-          ('Wind down for sleep', 30, -1, 'rest'),
-        ];
-        for (var i = 0; i < defaults.length; i++) {
-          final d = defaults[i];
-          await widget.model.save(
-            'routine',
-            {
-              'title': d.$1,
-              'minutes': d.$2,
-              'at': d.$3,
-              'enabled': true,
-              'kind': d.$4,
-            },
-            id: 'routine-$i',
-            reload: false,
-          );
-        }
-      }
       final now = DateTime.now();
       await widget.model.arrange({
         'date': day(now),
@@ -501,7 +477,7 @@ class _CheckInState extends State<CheckIn> {
         'now': now.hour * 60 + now.minute,
       });
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {

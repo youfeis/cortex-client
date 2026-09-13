@@ -34,6 +34,10 @@ unknown values remain unknown. Saved memories survive context compaction.
 - A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
 - Chat follows the latest message when the iPhone keyboard opens or closes,
   after the resized message list settles. Ordinary history scrolling stays free.
+- Chat opens at the end on cold launch, app resume and returning to the Chat tab.
+  Newest messages anchor a reversed list at offset zero, so loading long history,
+  streaming text or replacing the remote layout does not rely on an estimated
+  total scroll height. Background data refreshes do not force a jump while reading.
 - Google Calendar is the master source: personal/work accounts link in Settings.
 - One calendar selection is stored on the server and shared by all devices.
 - The next 30 days sync every five minutes on the server, including while Cortex

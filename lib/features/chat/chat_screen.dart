@@ -28,22 +28,27 @@ class ChatScreen extends StatefulWidget {
 }
 
 class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  final draft = TextEditingController(), scroll = ScrollController();
+  final draft = TextEditingController();
+  final scroll = ScrollController(keepScrollOffset: false);
   final focus = FocusNode();
   final images = <Attachment>[];
   bool sending = false;
   String? error;
-  int previousCount = 0;
   double? _keyboardInset;
   bool _chatKeyboardActive = false;
   bool _followingKeyboard = false;
-  bool _keyboardScrollQueued = false;
+  bool _latestScrollQueued = false;
   Timer? _keyboardSettled;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    widget.model.addListener(changed);
+    showLatest();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) showLatest();
   }
 
   @override
@@ -76,48 +81,38 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _queueKeyboardScroll() {
-    if (!_followingKeyboard || _keyboardScrollQueued) return;
-    _keyboardScrollQueued = true;
+    if (_followingKeyboard) showLatest();
+  }
+
+  void showLatest() {
+    if (!mounted || _latestScrollQueued) return;
+    _latestScrollQueued = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _keyboardScrollQueued = false;
-      if (!mounted || !_followingKeyboard || !scroll.hasClients) return;
+      _latestScrollQueued = false;
+      if (!mounted || !scroll.hasClients) return;
       final position = scroll.position;
-      if ((position.pixels - position.maxScrollExtent).abs() > 0.5) {
-        scroll.jumpTo(position.maxScrollExtent);
+      // The reversed list has an exact end at offset zero, even while older
+      // variable-height messages have not been laid out or images are loading.
+      if (position.hasContentDimensions &&
+          (position.pixels - position.minScrollExtent).abs() > 0.5) {
+        scroll.jumpTo(position.minScrollExtent);
       }
     });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _keyboardSettled?.cancel();
-    widget.model.removeListener(changed);
     draft.dispose();
     scroll.dispose();
     focus.dispose();
     super.dispose();
   }
 
-  void changed() {
-    final nearBottom =
-        !scroll.hasClients ||
-        scroll.position.maxScrollExtent - scroll.offset < 180;
-    if (nearBottom || previousCount == 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (scroll.hasClients) {
-          scroll.animateTo(
-            scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
-    previousCount = widget.model.messages.length;
-  }
-
   void prepare(String text, {bool photo = false}) {
+    showLatest();
     if (draft.text.trim().isEmpty) {
       draft.text = text;
     } else if (text.isNotEmpty) {
@@ -223,6 +218,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           images.removeWhere(selected.contains);
           sending = false;
         });
+        showLatest();
       }
     } catch (e) {
       if (mounted) {
@@ -274,6 +270,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             },
             child: ListView(
               controller: scroll,
+              reverse: true,
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
               children: [
                 if (m.messages.isEmpty)
@@ -293,6 +290,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 for (final message in m.messages)
                   RemoteLayout(
+                    key: ValueKey('message-${message['id']}'),
                     page: message['role'] == 'user'
                         ? 'userMessage'
                         : 'assistantMessage',
@@ -347,6 +345,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 if ((m.chat['text'] as String? ?? '').isNotEmpty)
                   Panel(
+                    key: const ValueKey('streaming-reply'),
                     child: messageContent(
                       m,
                       false,
@@ -374,7 +373,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-              ],
+              ].reversed.toList(),
             ),
           ),
         ),

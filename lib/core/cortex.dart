@@ -478,7 +478,10 @@ class CortexModel extends ChangeNotifier {
   }
 
   Future<void> arrange(Map<String, dynamic> input) async {
-    await api.call('POST', '/v1/plan', input);
+    await api.call('POST', '/v1/plan', {
+      ...input,
+      'timezoneOffset': DateTime.now().timeZoneOffset.inMinutes,
+    });
     await refresh();
   }
 

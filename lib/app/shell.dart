@@ -105,7 +105,11 @@ class _HomeScreenState extends State<HomeScreen> {
   void chat(String prompt, {bool photo = false}) {
     setState(() => tab = 0);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      chatKey.currentState?.prepare(prompt, photo: photo);
+      if (prompt.isNotEmpty || photo) {
+        chatKey.currentState?.prepare(prompt, photo: photo);
+      } else {
+        chatKey.currentState?.showLatest();
+      }
     });
   }
 

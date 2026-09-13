@@ -304,3 +304,16 @@ foreground restoration and stale-action rejection. Synthetic tasks are removed.
 ## Pets
 
 My space → Pets shows separate Cookie and Wanwan weight charts with 30-day, 90-day and all-history filters. Every same-day reading is retained, values use two decimal places in kg, and the axis leaves room for small changes. Use the chat links to record or correct a weight; pull down to refresh. The Pets page and My space entry use the existing database-backed remote layout contract with a bundled offline layout. Missing readings remain empty.
+
+## Calendar-backed day planning
+
+The wake-up check-in sends energy, wake/bedtime and the phone’s UTC offset to the
+main chat. Planning progress appears there. Google Calendar holds planned times;
+the server projects its latest cache into the day view. Overnight times display
+“+1 day”. “Adjust today’s plan” opens a chat request instead of rebuilding it.
+
+Start/Done resolve the exact calendar occurrence, including when a to-do has
+multiple blocks. Done updates the original saved to-do; it never saves a second
+plan or deletes completed work. Routine blocks use their stable routine ID.
+Falling behind does not move calendar times. Postpone and extra-time buttons
+carry the owner’s scheduling request and reason to chat.

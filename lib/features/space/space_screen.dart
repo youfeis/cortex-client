@@ -6,6 +6,7 @@ import 'section_art.dart';
 
 import '../fitness/fitness_screen.dart';
 import '../time/time_screen.dart';
+import '../pets/pets_screen.dart';
 import '../../core/navigation.dart';
 
 class SpaceScreen extends StatelessWidget {
@@ -21,14 +22,21 @@ class SpaceScreen extends StatelessWidget {
         'Time\nmanagement',
         'A day with breathing room',
         Icons.schedule_rounded,
-        () => open(context, false),
+        () => open(context, 'time'),
       ),
       'fitness': area(
         context,
         'Fitness',
         'Small steps, visible progress',
         Icons.favorite_border_rounded,
-        () => open(context, true),
+        () => open(context, 'fitness'),
+      ),
+      'pets': area(
+        context,
+        'Pets',
+        'Cookie & Wanwan',
+        Icons.pets_rounded,
+        () => open(context, 'pets'),
       ),
       'money': area(
         context,
@@ -72,9 +80,11 @@ class SpaceScreen extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: SectionArt(
-                      fitness: icon == Icons.favorite_border_rounded,
-                    ),
+                    child: icon == Icons.pets_rounded
+                        ? const PetSectionArt()
+                        : SectionArt(
+                            fitness: icon == Icons.favorite_border_rounded,
+                          ),
                   ),
                 ),
               )
@@ -96,7 +106,7 @@ class SpaceScreen extends StatelessWidget {
       ),
     ),
   );
-  void open(BuildContext context, bool fitness) => Navigator.push(
+  void open(BuildContext context, String section) => Navigator.push(
     context,
     MaterialPageRoute<void>(
       builder: (pageContext) {
@@ -105,9 +115,11 @@ class SpaceScreen extends StatelessWidget {
           onChat(prompt, photo: photo);
         }
 
-        return fitness
-            ? FitnessScreen(model: model, onChat: backToChat)
-            : TimeScreen(model: model, onChat: backToChat);
+        return switch (section) {
+          'fitness' => FitnessScreen(model: model, onChat: backToChat),
+          'pets' => PetsScreen(model: model, onChat: backToChat),
+          _ => TimeScreen(model: model, onChat: backToChat),
+        };
       },
     ),
   );

@@ -316,6 +316,8 @@ class HealthTrendCard extends StatefulWidget {
   final String? summary;
   final Widget? controls;
   final double factor;
+  final int? decimalPlaces;
+  final double minimumWeightPadding;
   final double? target;
   const HealthTrendCard({
     super.key,
@@ -327,6 +329,8 @@ class HealthTrendCard extends StatefulWidget {
     this.summary,
     this.controls,
     this.factor = 1,
+    this.decimalPlaces,
+    this.minimumWeightPadding = .5,
     this.target,
   });
   @override
@@ -338,7 +342,7 @@ class _HealthTrendCardState extends State<HealthTrendCard> {
   String value(HealthPoint p) => widget.metric == TrendMetric.bp
       ? '${p.value.round()}/${p.second!.round()}'
       : (p.value / widget.factor).toStringAsFixed(
-          widget.unit == 'mg/dL' ? 0 : 1,
+          widget.decimalPlaces ?? (widget.unit == 'mg/dL' ? 0 : 1),
         );
   @override
   Widget build(BuildContext context) {
@@ -415,6 +419,8 @@ class _HealthTrendCardState extends State<HealthTrendCard> {
                   factor: widget.factor,
                   target: widget.target,
                   color: color,
+                  weightDecimals: widget.decimalPlaces ?? 1,
+                  minimumWeightPadding: widget.minimumWeightPadding,
                 );
                 void select(Offset at) {
                   final width = max(1.0, constraints.maxWidth - 52);
@@ -486,7 +492,7 @@ class _HealthTrendCardState extends State<HealthTrendCard> {
             ),
             if (widget.metric == TrendMetric.weight && points.length > 1) ...[
               Text(
-                '${points.last.value - points.first.value >= 0 ? '+' : ''}${(points.last.value - points.first.value).toStringAsFixed(1)} kg in this period',
+                '${points.last.value - points.first.value >= 0 ? '+' : ''}${(points.last.value - points.first.value).toStringAsFixed(widget.decimalPlaces ?? 1)} kg in this period',
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -515,6 +521,8 @@ class HealthChartPainter extends CustomPainter {
   final double factor;
   final double? target;
   final Color color;
+  final int weightDecimals;
+  final double minimumWeightPadding;
   HealthChartPainter({
     required this.points,
     required this.selected,
@@ -522,6 +530,8 @@ class HealthChartPainter extends CustomPainter {
     required this.factor,
     required this.target,
     required this.color,
+    this.weightDecimals = 1,
+    this.minimumWeightPadding = .5,
   });
   @override
   void paint(Canvas canvas, Size size) {
@@ -544,12 +554,12 @@ class HealthChartPainter extends CustomPainter {
     final pad = max(
       (maxV - minV) * .18,
       metric == TrendMetric.weight
-          ? .5
+          ? minimumWeightPadding
           : metric == TrendMetric.glucose
           ? (factor == 1 ? 5.0 : .3)
           : 5.0,
     );
-    minV -= pad;
+    minV = metric == TrendMetric.weight ? max(0, minV - pad) : minV - pad;
     maxV += pad;
     final timeRange = max(
       1,
@@ -600,8 +610,9 @@ class HealthChartPainter extends CustomPainter {
       );
       text(
         v.toStringAsFixed(
-          metric == TrendMetric.weight ||
-                  metric == TrendMetric.glucose && factor != 1
+          metric == TrendMetric.weight
+              ? weightDecimals
+              : metric == TrendMetric.glucose && factor != 1
               ? 1
               : 0,
         ),

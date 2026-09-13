@@ -98,3 +98,42 @@ class _SectionPainter extends CustomPainter {
   bool shouldRepaint(covariant _SectionPainter oldDelegate) =>
       fitness != oldDelegate.fitness;
 }
+
+class PetSectionArt extends StatelessWidget {
+  const PetSectionArt({super.key});
+  @override
+  Widget build(BuildContext context) => Semantics(
+    image: true,
+    label: 'Two paw prints for Cookie and Wanwan',
+    child: SizedBox(
+      width: 115,
+      height: 78,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 2,
+            top: 4,
+            child: Container(
+              width: 110,
+              height: 71,
+              decoration: const BoxDecoration(
+                color: soft,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 12,
+            top: 6,
+            child: Icon(Icons.pets_rounded, size: 54, color: ink),
+          ),
+          const Positioned(
+            right: 6,
+            bottom: 4,
+            child: Icon(Icons.pets_rounded, size: 40, color: Color(0xFF9A6845)),
+          ),
+        ],
+      ),
+    ),
+  );
+}

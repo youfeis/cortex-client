@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSupportsLiveActivities</key><true/>
+	<key>FlutterDeepLinkingEnabled</key><false/>
+	<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>cortex</string></array></dict></array>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Cortex sets alarms you ask for in chat, so your iPhone can alert you at the right time.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

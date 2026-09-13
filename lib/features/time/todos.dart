@@ -90,6 +90,19 @@ class TodoList extends StatelessWidget {
                 ],
               ),
             ),
+            if (task.data['done'] != true && !model.taskFocus.visible)
+              IconButton(
+                tooltip: 'Start this task',
+                onPressed: () => action(
+                  context,
+                  () => model.taskFocus.start(
+                    title: task.data['title'] as String,
+                    taskId: task.id,
+                    minutes: (task.data['minutes'] as num?)?.toInt() ?? 25,
+                  ),
+                ),
+                icon: const Icon(Icons.play_circle_outline, size: 22),
+              ),
             IconButton(
               tooltip: 'Discuss this to-do',
               visualDensity: VisualDensity.compact,

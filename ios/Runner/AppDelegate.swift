@@ -9,13 +9,20 @@ import HealthKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    CortexFocus.shared.setup()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    if CortexFocus.shared.open(url) { return true }
+    return super.application(app, open:url, options:options)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CortexNative")!
     let channel = FlutterMethodChannel(name: "com.miaotutu.cortex/native", binaryMessenger: registrar.messenger())
+    CortexFocus.changed = { channel.invokeMethod("focusChanged", arguments: nil) }
     CortexNative.healthChanged = { channel.invokeMethod("healthChanged", arguments: nil) }
     if #available(iOS 26.0, *) { CortexAlarms.changed = { channel.invokeMethod("alarmsChanged", arguments: nil) } }
     channel.setMethodCallHandler { call, result in
@@ -39,6 +46,8 @@ import HealthKit
             DispatchQueue.main.async { result(FlutterError(code: "device_key", message: error.localizedDescription, details: nil)) }
           }
         }
+      case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge":
+        CortexFocus.shared.handle(call.method, call.arguments as? [String: Any] ?? [:], result)
       case "alarmStatus", "alarmPermission", "alarmApply":
         if #available(iOS 26.0, *) { CortexAlarms.handle(call.method, call.arguments as? [String: Any] ?? [:], result) }
         else { result(["permission": "unavailable", "scheduledIds": [], "status": "failed", "error": "Alarms require iOS 26 or later."]) }

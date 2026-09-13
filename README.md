@@ -215,3 +215,33 @@ chat/checkbox/day-plan completion. Doses never complete from a schedule or meal.
 Source captions explain why a box is checked. A checkbox correction overrides
 auto-matching for that date; tomorrow starts fresh. Off-day rotation checkboxes
 are disabled. Day-plan status uses the same routine completion state.
+
+## Current task and gentle check-ins
+
+Tell chat “I'm starting…” or tap Start on a to-do/day-plan task. A compact
+current-task strip stays in both tabs; tap it for Done, Still working (+15 min),
+and Need a break. A break stops reminders without completing the to-do. Silence
+leaves the task unconfirmed. Completing a linked task also completes its to-do;
+Google Calendar events are not automatically moved.
+
+The native ActivityKit widget extension (`CortexFocusWidget`) shows the task on
+the Lock Screen (and Dynamic Island on supported iPhones). UserNotifications
+schedules a check-in 15 minutes after the expected finish, then every 15 minutes.
+Chat can choose a 30-minute cadence. Permission is in Settings > Task check-ins.
+Actions open Cortex; they stop/update local alerts first and queue a signed
+server mutation, so a pause/done works offline. Revision checks reject stale
+notification actions and protect a newer task. Polling never resets reminder
+counts or overwrites a queued offline response.
+
+Limits are explicit: Apple controls notification delivery, Focus settings apply,
+and a Live Activity lasts at most eight hours. Up to 32 local reminders are
+scheduled in advance, bounded to eight hours of check-ins. Settings shows the
+actual scheduled-through time. Reopening refills the schedule; the server does
+not claim indefinite background wakeups. There is no APNs credential requirement.
+The task remains saved after local notification expiry. Swiping away a Live
+Activity is respected until an explicit task update; it does not mark work done.
+
+Native verification (idle simulator only):
+`flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
+checks actual notification delivery, Live Activity creation, idempotent schedule,
+offline pause/complete, and stale-action rejection; its synthetic task is removed.

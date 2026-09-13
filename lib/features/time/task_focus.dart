@@ -335,7 +335,7 @@ class FocusSettings extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               caption(
-                'One Lock Screen card holds overlapping tasks. Tap a task to choose which timer the buttons change.',
+                'One Lock Screen card shows two tasks with their own progress bars and buttons. Extra tasks are available in Cortex.',
               ),
               const SizedBox(height: 8),
               caption(

@@ -249,8 +249,10 @@ offline pause/complete, and stale-action rejection; its synthetic task is remove
 ## Shared task card
 
 Overlapping tasks share one native Live Activity. Each task has its own countdown,
-revision and action outbox. Select a task row before using I’ve started, Completed,
-+5/+10/+15 minutes, or Break. Postpone opens a reason sheet; expanded reminder
+revision and action outbox. Two task rows show their progress and their own
+I’ve started / Completed, +5/+10/+15 minutes, Postpone and pause buttons together,
+without selecting a task. The Lock Screen's 160-point height limit means extra
+tasks open in the app from the overflow link. Postpone opens a reason sheet; expanded reminder
 notifications also accept a typed/dictated reason. Reopening Cortex restores the
 card once without resetting deadlines or repeatedly undoing swipe dismissal.
 

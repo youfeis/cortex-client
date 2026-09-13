@@ -45,8 +45,10 @@ void main() {
   late Map<String, dynamic> local;
   late List<Map<String, dynamic>> pending;
   var count = 32;
+  List<String>? coverage;
   Map<String, dynamic> status() => {
     'permission': 'authorized',
+    'liveCoveredIDs': ?coverage,
     'liveEnabled': true,
     'liveActive': local['status'] == 'active',
     'notificationCount': local['status'] == 'active' ? count : 0,
@@ -59,6 +61,7 @@ void main() {
     local = Map.from(api.focus);
     pending = [];
     count = 32;
+    coverage = null;
     focus = TaskFocus(api: api, changed: () {}, canSync: () => true);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(native, (call) async {
@@ -104,6 +107,25 @@ void main() {
       await focus.sync();
       expect(api.acks.last['status'], 'scheduled');
       expect(focus.visible, isTrue);
+    },
+  );
+  test(
+    'Card acknowledgements use per-task coverage, including pending schedules',
+    () async {
+      coverage = [];
+      await focus.sync();
+      expect(
+        api.acks.last['status'],
+        'notifications_only',
+        reason: 'Another task card does not cover this task.',
+      );
+      count = 0;
+      api.focus['status'] = 'pending';
+      coverage = ['task-focus'];
+      await focus.sync();
+      expect(api.acks.last['status'], 'scheduled');
+      expect(focus.liveActive, false);
+      expect(focus.visible, true);
     },
   );
   test(

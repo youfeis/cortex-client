@@ -107,6 +107,52 @@ void main() {
     expect(m.entries.first.data['done'], isNull);
     m.dispose();
   });
+  testWidgets('Today keeps completed tasks visible and crossed out', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final m = CortexModel()
+      ..entries = [
+        Entry('done-today', 'task', {
+          'title': 'Did the laundry',
+          'deadline': '2026-09-13',
+          'done': true,
+          'completedAt': now.toUtc().toIso8601String(),
+        }),
+        Entry('older', 'task', {
+          'title': 'Old achievement',
+          'deadline': '2026-09-10',
+          'done': true,
+          'completedAt': now
+              .subtract(const Duration(days: 1))
+              .toUtc()
+              .toIso8601String(),
+        }),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: TodoList(model: m, onChat: (text, {photo = false}) {}),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Done today'), findsOneWidget);
+    expect(find.text('1 completed'), findsOneWidget);
+    expect(find.text('Did the laundry'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Did the laundry')).style?.decoration,
+      TextDecoration.lineThrough,
+    );
+    expect(find.text('Old achievement'), findsOneWidget);
+    expect(todoCompletedToday(m.entries.first, now), isTrue);
+    expect(
+      todoCompletedToday(Entry('legacy', 'task', {'done': true}), now),
+      isFalse,
+    );
+    m.dispose();
+  });
   testWidgets('Keyboard accessory dismisses focus and preserves the draft', (
     tester,
   ) async {

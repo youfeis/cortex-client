@@ -191,6 +191,13 @@ class _FocusPanelState extends State<FocusPanel> {
     final focus = widget.model.taskFocus;
     final status = item['status'];
     final active = status == 'active', ready = status == 'ready';
+    final waiting = status == 'pending';
+    final planned = DateTime.tryParse(
+      item['scheduledStart'] as String? ?? '',
+    )?.toLocal();
+    final activation = DateTime.tryParse(
+      item['activateAt'] as String? ?? '',
+    )?.toLocal();
     final end = DateTime.tryParse(
       item['expectedEnd'] as String? ?? '',
     )?.toLocal();
@@ -203,6 +210,8 @@ class _FocusPanelState extends State<FocusPanel> {
         ? (left != null && left >= 0
               ? '$left min remaining · until ${clock(end!.hour * 60 + end.minute)}'
               : 'Time’s up. Still working? Are you doing okay?')
+        : waiting
+        ? 'Pending · card activates ${activation == null ? '30 min before start' : clock(activation.hour * 60 + activation.minute)}. Planned ${planned == null ? '' : clock(planned.hour * 60 + planned.minute)}.'
         : ready
         ? 'Ready when you are. Tap “I’ve started”.'
         : status == 'postponed'
@@ -256,7 +265,13 @@ class _FocusPanelState extends State<FocusPanel> {
                 TextButton.icon(
                   onPressed: () => action(context, () => respond('begin')),
                   icon: const Icon(Icons.play_arrow, size: 18),
-                  label: Text(ready ? 'I’ve started' : 'Resume'),
+                  label: Text(
+                    waiting
+                        ? 'Start early'
+                        : ready
+                        ? 'I’ve started'
+                        : 'Resume',
+                  ),
                 ),
               TextButton(
                 onPressed: () => postponeFocus(context, widget.model, item),
@@ -299,7 +314,7 @@ class _FocusPanelState extends State<FocusPanel> {
             ),
           if (item['preview'] == true)
             caption('Preview only · excluded from planning and statistics'),
-          if (focus.notificationCount == 0 && (active || ready))
+          if (focus.notificationCount == 0 && (active || ready || waiting))
             TextButton(
               onPressed: () =>
                   action(context, () => focus.sync(requestPermission: true)),
@@ -335,15 +350,15 @@ class FocusSettings extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               caption(
-                'One Lock Screen card shows two tasks side by side. Each has a progress bar and large buttons. The clock-arrow button postpones a task. Extra tasks open in Cortex.',
+                'One Lock Screen card shows two tasks side by side. Each has a progress bar and large buttons. The clock-arrow button postpones a task. When more than two tasks overlap, use the arrows to see the next or previous pair. The page number appears under the left arrow.',
               ),
               const SizedBox(height: 8),
               caption(
-                'Check-ins arrive at the expected finish, 10 minutes later, then every 15 minutes. Pausing or postponing stops reminders but keeps the unfinished task on the card. Completing or stopping tracking removes it.',
+                'Calendar items activate 30 minutes early. Pending → ready → working → completed. You tap Start; the clock never starts or completes work. Check-ins arrive at the expected finish, 10 minutes later, then every 15 minutes. Pausing or postponing stops reminders but keeps the unfinished task on the card. Completing or stopping tracking removes it.',
               ),
               const SizedBox(height: 8),
               caption(
-                'Reopening Cortex restores unfinished tasks, even offline. iOS can remove a card after 8 hours or when you dismiss it. Focus and notification settings control alerts. Planning updates need a connection.',
+                'Downloaded calendar items can activate while Cortex is closed. Reopening refreshes upcoming cards and calendar changes. iOS limits how many can be queued. Reopening Cortex restores unfinished tasks, even offline. iOS can remove a card after 8 hours or when you dismiss it. Focus and notification settings control alerts. Planning updates need a connection.',
               ),
               if (focus.visible) ...[
                 const SizedBox(height: 12),
@@ -352,6 +367,8 @@ class FocusSettings extends StatelessWidget {
                       ? 'Task card is available'
                       : focus.liveState == 'disabled'
                       ? 'Live Activities are off in iPhone settings'
+                      : focus.liveState == 'scheduled'
+                      ? 'Upcoming task card scheduled on this iPhone'
                       : 'Task card is not showing',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),

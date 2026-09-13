@@ -23,3 +23,18 @@ struct CortexFocusActionIntent: LiveActivityIntent {
     return .result()
   }
 }
+
+@available(iOS 17.0, *)
+struct CortexFocusPageIntent: LiveActivityIntent {
+  static var title: LocalizedStringResource = "Show Cortex tasks"
+  static var openAppWhenRun: Bool = false
+  @Parameter(title: "Page") var page: Int
+  init() {}
+  init(_ page: Int) { self.page = page }
+  func perform() async throws -> some IntentResult {
+    #if !CORTEX_WIDGET
+      try await CortexFocus.shared.showPage(page)
+    #endif
+    return .result()
+  }
+}

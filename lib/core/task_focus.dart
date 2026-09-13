@@ -28,6 +28,7 @@ class TaskFocus {
       (tasks.isEmpty && current != null ? [current!] : tasks)
           .where(
             (f) => [
+              'pending',
               'ready',
               'active',
               'paused',
@@ -117,7 +118,13 @@ class TaskFocus {
         if (!all.whereType<Map>().any(
           (f) =>
               f['preview'] != true &&
-              ['ready', 'active', 'paused', 'postponed'].contains(f['status']),
+              [
+                'pending',
+                'ready',
+                'active',
+                'paused',
+                'postponed',
+              ].contains(f['status']),
         )) {
           local = await _native('focusPermission');
           final at = DateTime.parse(preview['at'] as String);
@@ -157,14 +164,19 @@ class TaskFocus {
           .toSet();
       for (final item in tasks) {
         if (pendingIDs.contains(item['id'])) continue;
-        final tracked = ['ready', 'active'].contains(item['status']);
+        final tracked = ['pending', 'ready', 'active'].contains(item['status']);
         final perTask =
             (result['taskNotifications'] as Map?)?[item['id']] as Map?;
         final count = perTask?['count'] as int? ?? notificationCount;
+        final coverage = result['liveCoveredIDs'] as List?;
+        final covered =
+            coverage?.contains(item['id']) ?? (liveActive && count > 0);
         final state = !tracked
             ? 'stopped'
+            : covered
+            ? 'scheduled'
             : count > 0
-            ? (liveActive ? 'scheduled' : 'notifications_only')
+            ? 'notifications_only'
             : (permission == 'authorized' ? 'failed' : 'needs_permission');
         await api.call('POST', '/v1/focus/ack', {
           'id': item['id'],

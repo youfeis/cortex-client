@@ -39,6 +39,13 @@ String todoDueLabel(Entry task, DateTime now) {
       : 'Due'} · $text';
 }
 
+bool todoCompletedToday(Entry task, DateTime now) {
+  final at = DateTime.tryParse(task.data['completedAt']?.toString() ?? '');
+  return task.data['done'] == true &&
+      at != null &&
+      day(at.toLocal()) == day(now);
+}
+
 class TodoList extends StatelessWidget {
   final CortexModel model;
   final OpenChat onChat;
@@ -54,6 +61,12 @@ class TodoList extends StatelessWidget {
     final pending = tasks.where((t) => t.data['done'] != true).toList();
     final completed = tasks.where((t) => t.data['done'] == true).toList();
     final now = DateTime.now();
+    final doneToday = completed
+        .where((t) => todoCompletedToday(t, now))
+        .toList();
+    final olderDone = completed
+        .where((t) => !todoCompletedToday(t, now))
+        .toList();
     final today = pending.where((t) => todoIsDueToday(t, now)).toList();
     final other = pending.where((t) => !todoIsDueToday(t, now)).toList();
     Widget row(Entry task) => Padding(
@@ -86,7 +99,11 @@ class TodoList extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  caption(todoDueLabel(task, now)),
+                  caption(
+                    todoCompletedToday(task, now)
+                        ? 'Completed today · ${todoDueLabel(task, now)}'
+                        : todoDueLabel(task, now),
+                  ),
                 ],
               ),
             ),
@@ -135,13 +152,21 @@ class TodoList extends StatelessWidget {
             child: Text('Nothing due today. A little breathing room.'),
           ),
         for (final task in today) row(task),
+        sectionHead(
+          'Done today',
+          trailing: Text('${doneToday.length} completed'),
+        ),
+        if (doneToday.isEmpty)
+          caption('Finished tasks will stay here, crossed out.'),
+        for (final task in doneToday) row(task),
         if (other.isNotEmpty) sectionHead('Other deadlines'),
         for (final task in other) row(task),
-        if (completed.isNotEmpty)
+        if (olderDone.isNotEmpty)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: Text('Completed · ${completed.length}'),
-            children: [for (final task in completed) row(task)],
+            initiallyExpanded: true,
+            title: Text('Other completed tasks · ${olderDone.length}'),
+            children: [for (final task in olderDone) row(task)],
           ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

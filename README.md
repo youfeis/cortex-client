@@ -216,55 +216,47 @@ Source captions explain why a box is checked. A checkbox correction overrides
 auto-matching for that date; tomorrow starts fresh. Off-day rotation checkboxes
 are disabled. Day-plan status uses the same routine completion state.
 
-## Current task and gentle check-ins
+## Task cards and check-ins
 
-Tell chat “I'm starting…” or tap Start on a to-do/day-plan task. A compact
-current-task strip stays in both tabs; tap it for Done, Still working (+15 min),
-and Need a break. A break stops reminders without completing the to-do. Silence
-leaves the task unconfirmed. Completing a linked task also completes its to-do;
-Google Calendar events are not automatically moved.
+Tell chat “I'm starting…” or tap Start on a to-do/day-plan task. A current-task
+strip stays in both tabs and opens the full task controls. Completing a linked
+task completes its to-do. Pausing/postponing stops reminders without completing
+work; silence never marks a task done. Google Calendar changes require planning.
 
-The native ActivityKit widget extension (`CortexFocusWidget`) shows the task on
-the Lock Screen (and Dynamic Island on supported iPhones). UserNotifications
-schedules a check-in 15 minutes after the expected finish, then every 15 minutes.
-Chat can choose a 30-minute cadence. Permission is in Settings > Task check-ins.
-Actions open Cortex; they stop/update local alerts first and queue a signed
-server mutation, so a pause/done works offline. Revision checks reject stale
-notification actions and protect a newer task. Polling never resets reminder
-counts or overwrites a queued offline response.
+Overlapping tasks share one 160-point native Live Activity. Two columns show
+independent progress and 44-point-high buttons: Start/Done/Resume, the clock-arrow
+Postpone button, Pause and +5/+10/+15 minutes. Titles open task details; an
+overflow link opens additional tasks. Task positions remain stable when the
+server returns its latest-edited task first. Paused/postponed tasks remain on
+the card with Resume; only completed/cancelled tasks leave it. Future-ready
+tasks appear immediately instead of being mistaken for a visible pending Activity.
 
-Limits are explicit: Apple controls notification delivery, Focus settings apply,
-and a Live Activity lasts at most eight hours. Up to 32 local reminders are
-scheduled in advance, bounded to eight hours of check-ins. Settings shows the
-actual scheduled-through time. Reopening refills the schedule; the server does
-not claim indefinite background wakeups. There is no APNs credential requirement.
-The task remains saved after local notification expiry. Swiping away a Live
-Activity is respected until an explicit task update; it does not mark work done.
-
-Native verification (idle simulator only):
-`flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
-checks actual notification delivery, Live Activity creation, idempotent schedule,
-offline pause/complete, and stale-action rejection; its synthetic task is removed.
-
-## Shared task card
-
-Overlapping tasks share one native Live Activity. Each task has its own countdown,
-revision and action outbox. Two task rows show their progress and their own
-I’ve started / Completed, +5/+10/+15 minutes, Postpone and pause buttons together,
-without selecting a task. The Lock Screen's 160-point height limit means extra
-tasks open in the app from the overflow link. Postpone opens a reason sheet; expanded reminder
-notifications also accept a typed/dictated reason. Reopening Cortex restores the
-card once without resetting deadlines or repeatedly undoing swipe dismissal.
+Reopening Cortex restores cached unfinished tasks before network access succeeds.
+Bounded local retries handle iOS scene activation delays. Activity lifecycle
+changes refresh the displayed status; expiry can renew while Cortex is open.
+Swiping away a card is respected until reopening or an explicit task update.
+Settings > Task check-ins shows availability and has Restore task card.
+Apple can end a Live Activity after eight hours; a continuously visible card
+cannot be guaranteed while the app remains closed. Tasks remain stored.
 
 Button actions save locally before syncing with the signed API. App Intents try
 to sync directly; offline/locked-device failures remain queued for the next open.
-The server forwards real starts, extensions and postponements to the main chat
-when idle. Preview timers are explicitly excluded from planning and statistics.
+Revision checks reject stale actions. The server forwards real starts, extensions
+and postponements to the main chat when idle. Postpone opens a reason sheet;
+expanded reminder notifications also accept a typed/dictated reason.
+
+Reminders fire at the expected finish, after ten minutes, then every fifteen
+minutes (or chat-selected thirty), within the latest plan’s waking hours.
+Up to forty reminders total are pre-scheduled across tasks and refreshed on open,
+bounded to eight hours of check-ins. Notification/Focus permissions control alerts.
+Pausing, postponing or completing a task cancels only its reminders.
+
 Settings > Task check-ins > Preview overlapping task card provides two test timers
 when there are no real open tasks. The same flow is available at
-`cortex://focus?action=preview` for device verification.
+`cortex://focus?action=preview`. Preview timers are excluded from planning and stats.
 
-Notifications fire at the expected finish, after ten minutes, then every fifteen
-minutes, subject to the latest plan’s waking hours. Up to forty reminders total
-are pre-scheduled across tasks and refreshed on open. The eight-hour iOS Live
-Activity limit and system notification/Focus permissions still apply.
+Native verification (idle simulator only):
+`flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
+checks real notification delivery, one shared card, independent offline actions,
+stable task positions, paused/postponed visibility, future-ready visibility,
+foreground restoration and stale-action rejection. Synthetic tasks are removed.

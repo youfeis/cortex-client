@@ -154,6 +154,22 @@ void main() {
     await focus.sync();
     expect(api.focus['status'], 'paused');
   });
+  test(
+    'restore shows the cached card without waiting for the server',
+    () async {
+      await focus.sync();
+      final gate = Completer<void>();
+      api.blockedGet = gate;
+      final refresh = focus.sync();
+      await Future<void>.delayed(Duration.zero);
+      await focus.restore().timeout(const Duration(seconds: 1));
+      expect(focus.liveActive, isTrue);
+      expect(focus.current!['id'], 'task-focus');
+      api.blockedGet = null;
+      gate.complete();
+      await refresh;
+    },
+  );
   testWidgets(
     'current task offers done, more time, and break without an edit form',
     (tester) async {

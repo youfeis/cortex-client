@@ -16,6 +16,7 @@ class TaskFocus {
   Map<String, dynamic>? current, openRequest;
   List<Map<String, dynamic>> tasks = [];
   String permission = 'unknown';
+  String liveState = 'none';
   bool liveEnabled = false, liveActive = false, syncing = false;
   int notificationCount = 0;
   String? scheduledThrough, error;
@@ -41,6 +42,8 @@ class TaskFocus {
     permission = state['permission'] as String? ?? 'unavailable';
     liveEnabled = state['liveEnabled'] == true;
     liveActive = state['liveActive'] == true;
+    liveState =
+        state['liveState'] as String? ?? (liveActive ? 'active' : 'missing');
     notificationCount = state['notificationCount'] as int? ?? 0;
     scheduledThrough = state['scheduledThrough'] as String?;
     current = state['focus'] is Map
@@ -187,6 +190,13 @@ class TaskFocus {
   Future<void> preview() async {
     await _native('focusPreview');
     await sync();
+  }
+
+  Future<void> restore() async {
+    // The cached task card can be restored before any network request succeeds.
+    _receive(await _native('focusRestore'));
+    if (!_disposed) changed();
+    unawaited(sync(afterAction: true));
   }
 
   Future<void> acknowledgeOpen() async {

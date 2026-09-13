@@ -1,3 +1,4 @@
+import 'task_focus.dart';
 import 'phone_alarms.dart';
 import 'memory_notices.dart';
 import '../remote_ui/layout_store.dart';
@@ -156,6 +157,11 @@ class CortexModel extends ChangeNotifier {
   bool _disposed = false;
   final memoryNotices = MemoryNotices();
   late final alarms = PhoneAlarms(
+    api: api,
+    changed: notifyListeners,
+    canSync: () => !_disposed && paired && foreground,
+  );
+  late final taskFocus = TaskFocus(
     api: api,
     changed: notifyListeners,
     canSync: () => !_disposed && paired && foreground,
@@ -338,6 +344,9 @@ class CortexModel extends ChangeNotifier {
 
   void startServices() {
     native.setMethodCallHandler((call) async {
+      if (call.method == 'focusChanged') {
+        unawaited(taskFocus.sync());
+      }
       if (call.method == 'alarmsChanged') {
         unawaited(alarms.sync());
       }
@@ -351,6 +360,14 @@ class CortexModel extends ChangeNotifier {
     });
     _alarmTimer?.cancel();
     _alarmTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (foreground &&
+          paired &&
+          (busy ||
+              taskFocus.checked == null ||
+              DateTime.now().difference(taskFocus.checked!) >
+                  const Duration(seconds: 30))) {
+        unawaited(taskFocus.sync());
+      }
       if (busy ||
           alarms.checked == null ||
           DateTime.now().difference(alarms.checked!) >
@@ -359,6 +376,7 @@ class CortexModel extends ChangeNotifier {
       }
     });
     unawaited(alarms.sync());
+    unawaited(taskFocus.sync());
     _servicesTimer?.cancel();
     _servicesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (foreground && paired) {
@@ -378,6 +396,7 @@ class CortexModel extends ChangeNotifier {
   void setForeground(bool active) {
     foreground = active;
     if (active && paired) {
+      unawaited(taskFocus.sync());
       unawaited(alarms.sync());
       unawaited(refresh().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));
@@ -623,6 +642,7 @@ class CortexModel extends ChangeNotifier {
     _healthDebounce?.cancel();
     _alarmTimer?.cancel();
     alarms.dispose();
+    taskFocus.dispose();
     api.close();
     super.dispose();
   }

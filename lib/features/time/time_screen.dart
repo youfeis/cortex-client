@@ -1,3 +1,4 @@
+import 'task_focus.dart';
 import 'alarms.dart';
 import '../fitness/medical_routines.dart';
 import '../../remote_ui/remote_layout.dart';
@@ -33,6 +34,11 @@ class TimeScreen extends StatelessWidget {
           .map((b) => Map<String, dynamic>.from(b as Map))
           .toList();
       for (final b in blocks) {
+        if (model
+            .records('task')
+            .any((t) => t.id == b['taskId'] && t.data['done'] == true)) {
+          b['done'] = true;
+        }
         final state = model.routineStates[b['id']];
         if (state is Map && state['date'] == day()) {
           b['done'] = state['done'] == true;
@@ -53,6 +59,7 @@ class TimeScreen extends StatelessWidget {
               'intro': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  FocusPanel(model: model),
                   label(day()),
                   const SizedBox(height: 10),
                   titleText('A day you can actually live.'),
@@ -124,6 +131,42 @@ class TimeScreen extends StatelessWidget {
                               '${clock((upcoming.first['start'] as num).toInt())} – ${clock((upcoming.first['end'] as num).toInt())}',
                             ),
                             const SizedBox(height: 20),
+                            if (!model.taskFocus.visible)
+                              FilledButton.icon(
+                                onPressed: () => action(
+                                  context,
+                                  () => model.taskFocus.start(
+                                    title: upcoming.first['title'] as String,
+                                    taskId:
+                                        model
+                                            .records('task')
+                                            .any(
+                                              (t) =>
+                                                  t.id ==
+                                                  upcoming.first['taskId'],
+                                            )
+                                        ? upcoming.first['taskId'] as String
+                                        : null,
+                                    expectedEnd: DateTime.now()
+                                        .copyWith(
+                                          hour: 0,
+                                          minute: 0,
+                                          second: 0,
+                                          millisecond: 0,
+                                          microsecond: 0,
+                                        )
+                                        .add(
+                                          Duration(
+                                            minutes:
+                                                (upcoming.first['end'] as num)
+                                                    .toInt(),
+                                          ),
+                                        ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Start this task'),
+                              ),
                             FilledButton.icon(
                               onPressed: () => complete(
                                 context,

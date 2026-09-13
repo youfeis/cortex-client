@@ -1,3 +1,4 @@
+import '../features/time/task_focus.dart';
 import 'package:flutter/material.dart';
 import '../core/cortex.dart';
 import '../main.dart';
@@ -130,11 +131,18 @@ class _HomeScreenState extends State<HomeScreen> {
     body: SafeArea(
       top: false,
       bottom: false,
-      child: IndexedStack(
-        index: tab,
+      child: Column(
         children: [
-          ChatScreen(key: chatKey, model: widget.model),
-          SpaceScreen(model: widget.model, onChat: chat),
+          FocusPanel(model: widget.model, compact: true),
+          Expanded(
+            child: IndexedStack(
+              index: tab,
+              children: [
+                ChatScreen(key: chatKey, model: widget.model),
+                SpaceScreen(model: widget.model, onChat: chat),
+              ],
+            ),
+          ),
         ],
       ),
     ),

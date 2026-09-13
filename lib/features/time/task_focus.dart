@@ -122,12 +122,15 @@ Future<void> postponeFocus(
   if (reason == null || !context.mounted) return;
   await action(
     context,
-    () => model.taskFocus.act(
-      'postpone',
-      id: item['id'] as String,
-      reason: reason,
-    ),
+    () => model.taskFocus.actPlanned(item, 'postpone', reason: reason),
   );
+}
+
+String _plannedEndLabel(Map<String, dynamic> item) {
+  final end = DateTime.tryParse(
+    item['plannedEnd']?.toString() ?? '',
+  )?.toLocal();
+  return end == null ? '' : clock(end.hour * 60 + end.minute);
 }
 
 class FocusPanel extends StatefulWidget {
@@ -137,10 +140,14 @@ class FocusPanel extends StatefulWidget {
     this.compact = false,
     this.showHeading = true,
     this.onFinished,
+    this.items,
+    this.planned = false,
   });
   final CortexModel model;
   final bool compact;
   final bool showHeading;
+  final List<Map<String, dynamic>>? items;
+  final bool planned;
   final VoidCallback? onFinished;
   @override
   State<FocusPanel> createState() => _FocusPanelState();
@@ -167,7 +174,7 @@ class _FocusPanelState extends State<FocusPanel> {
     animation: widget.model,
     builder: (context, _) {
       final focus = widget.model.taskFocus,
-          items = widget.model.taskFocus.visibleTasks;
+          items = widget.items ?? widget.model.taskFocus.visibleTasks;
       if (items.isEmpty) return const SizedBox.shrink();
       if (widget.compact) {
         return Material(
@@ -197,7 +204,7 @@ class _FocusPanelState extends State<FocusPanel> {
                         ),
                         Text(
                           focus.pending
-                              ? 'Saved on phone · planning update pending'
+                              ? 'Saved on phone · waiting to sync'
                               : 'Tap to review your task timers',
                           style: const TextStyle(fontSize: 11, color: muted),
                         ),
@@ -227,9 +234,7 @@ class _FocusPanelState extends State<FocusPanel> {
               child: _card(context, item),
             ),
           if (focus.pending)
-            caption(
-              'Saved on this phone · chat planning will follow when connected.',
-            ),
+            caption('Saved on this phone · changes will sync when connected.'),
           if (focus.error != null) caption(focus.error!),
         ],
       );
@@ -269,7 +274,7 @@ class _FocusPanelState extends State<FocusPanel> {
         : 'Paused. A break is okay.';
     Future<void> respond(String command, [int minutes = 15]) async {
       final model = widget.model;
-      await focus.act(command, id: item['id'] as String, minutes: minutes);
+      await focus.actPlanned(item, command, minutes: minutes);
       await model.refresh().catchError((_) {});
       if (!mounted) return;
       if (command == 'complete' || command == 'cancel') {
@@ -284,10 +289,21 @@ class _FocusPanelState extends State<FocusPanel> {
         children: [
           Text(
             item['title'] as String,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              decoration: status == 'done' ? TextDecoration.lineThrough : null,
+            ),
           ),
           const SizedBox(height: 8),
-          Text(detail),
+          if (widget.planned && planned != null)
+            caption(
+              'Planned ${clock(planned.hour * 60 + planned.minute)}${item['plannedEnd'] == null ? '' : ' – ${_plannedEndLabel(item)}'}',
+            ),
+          if (status == 'done')
+            caption('Completed')
+          else
+            Text(widget.planned && (waiting || ready) ? 'Not started' : detail),
           if (active && start != null && end != null) ...[
             const SizedBox(height: 10),
             LinearProgressIndicator(
@@ -302,43 +318,44 @@ class _FocusPanelState extends State<FocusPanel> {
             ),
             const SizedBox(height: 6),
           ],
-          Wrap(
-            spacing: 8,
-            children: [
-              if (active)
-                TextButton.icon(
-                  onPressed: () => action(context, () => respond('complete')),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Completed!'),
-                )
-              else
-                TextButton.icon(
-                  onPressed: () => action(context, () => respond('begin')),
-                  icon: const Icon(Icons.play_arrow, size: 18),
-                  label: Text(
-                    waiting
-                        ? 'Start early'
-                        : ready
-                        ? 'I’ve started'
-                        : 'Resume',
+          if (status != 'done')
+            Wrap(
+              spacing: 8,
+              children: [
+                if (!active)
+                  TextButton.icon(
+                    onPressed: () => action(context, () => respond('begin')),
+                    icon: const Icon(Icons.play_arrow, size: 18),
+                    label: Text(
+                      waiting
+                          ? 'Start early'
+                          : ready
+                          ? 'I’ve started'
+                          : 'Resume',
+                    ),
                   ),
-                ),
-              TextButton(
-                onPressed: () => postponeFocus(context, widget.model, item),
-                child: const Text('Postpone'),
-              ),
-              if (active)
+                if (active || widget.planned)
+                  TextButton.icon(
+                    onPressed: () => action(context, () => respond('complete')),
+                    icon: const Icon(Icons.check, size: 18),
+                    label: const Text('Completed!'),
+                  ),
                 TextButton(
-                  onPressed: () => action(context, () => respond('pause')),
-                  child: const Text('Take a break'),
+                  onPressed: () => postponeFocus(context, widget.model, item),
+                  child: const Text('Postpone'),
                 ),
-              if (!active && !ready)
-                TextButton(
-                  onPressed: () => action(context, () => respond('cancel')),
-                  child: const Text('Stop tracking'),
-                ),
-            ],
-          ),
+                if (active)
+                  TextButton(
+                    onPressed: () => action(context, () => respond('pause')),
+                    child: const Text('Take a break'),
+                  ),
+                if (!active && !ready)
+                  TextButton(
+                    onPressed: () => action(context, () => respond('cancel')),
+                    child: const Text('Stop tracking'),
+                  ),
+              ],
+            ),
           if (active)
             Wrap(
               spacing: 8,
@@ -351,14 +368,15 @@ class _FocusPanelState extends State<FocusPanel> {
                   ),
               ],
             ),
-          if (item['planningStatus'] == 'pending')
+          if (status == 'postponed' && item['planningStatus'] == 'pending')
             caption('Planning update queued for chat.'),
-          if (item['planningStatus'] == 'sent')
+          if (status == 'postponed' && item['planningStatus'] == 'sent')
             caption(
               'Update sent to chat · see Cortex’s reply for the new arrangement.',
             ),
-          if (item['planningStatus'] == 'needs_review' ||
-              item['planningStatus'] == 'forwarding')
+          if (status == 'postponed' &&
+              (item['planningStatus'] == 'needs_review' ||
+                  item['planningStatus'] == 'forwarding'))
             caption(
               'Task update saved. Check chat before relying on a new arrangement.',
             ),

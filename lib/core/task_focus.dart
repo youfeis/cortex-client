@@ -30,13 +30,16 @@ class TaskFocus {
     required this.changed,
     required this.canSync,
     this.quietHours,
+    this.onCompletionSynced,
   });
   final CortexApi api;
+  final void Function()? onCompletionSynced;
   final void Function() changed;
   final bool Function() canSync;
   final Map<String, dynamic>? Function()? quietHours;
   Map<String, dynamic>? current, openRequest;
-  List<Map<String, dynamic>> tasks = [];
+  List<Map<String, dynamic>> tasks = [], plannedTasks = [];
+  String? plannedDate, plannedError;
   String permission = 'unknown';
   String liveState = 'none';
   bool liveEnabled = false, liveActive = false, syncing = false;
@@ -116,6 +119,7 @@ class TaskFocus {
         var discarded = false;
         try {
           await api.call('POST', '/v1/focus/actions', input);
+          if (input['action'] == 'complete') onCompletionSynced?.call();
         } on ApiException catch (e) {
           if (e.status != 409 && e.status != 400) rethrow;
           discarded = true;
@@ -203,18 +207,107 @@ class TaskFocus {
           'scheduledThrough': perTask?['through'] ?? scheduledThrough ?? '',
         });
       }
+      await refreshPlanned();
       checked = DateTime.now();
       error = conflict;
     } on MissingPluginException {
       permission = 'unavailable';
     } catch (_) {
       error = pending
-          ? 'Saved on this phone. Planning will catch up when Cortex can connect.'
+          ? 'Saved on this phone. Changes will sync when Cortex can connect.'
           : 'Task check-ins could not refresh. Saved reminders remain on this phone.';
     } finally {
       syncing = false;
       if (!_disposed) changed();
     }
+  }
+
+  Future<void> refreshPlanned() async {
+    try {
+      final now = DateTime.now();
+      final response =
+          await api.call(
+                'GET',
+                '/v1/focus/planned?date=${day(now)}&timezoneOffset=${now.timeZoneOffset.inMinutes}',
+              )
+              as Map;
+      plannedTasks = (response['tasks'] as List? ?? [])
+          .whereType<Map>()
+          .map((f) => Map<String, dynamic>.from(f))
+          .toList();
+      plannedDate = day(now);
+      plannedError = null;
+    } catch (_) {
+      plannedError =
+          'Today’s calendar tasks could not refresh. Pull down to retry.';
+    }
+    if (!_disposed) changed();
+  }
+
+  List<Map<String, dynamic>> plannedForToday([DateTime? at]) {
+    final now = at ?? DateTime.now();
+    final rows = <String, Map<String, dynamic>>{};
+    if (plannedDate == day(now)) {
+      for (final f in plannedTasks) {
+        rows[f['id'] as String] = f;
+      }
+    }
+    for (final f in tasks) {
+      if (f['preview'] == true || f['status'] == 'cancelled') continue;
+      final start = _focusDate(f['scheduledStart'])?.toLocal();
+      if (start == null || day(start) != day(now)) continue;
+      final existing = rows[f['id']];
+      if (existing == null &&
+          plannedDate == day(now) &&
+          (f['calendarKey'] as String? ?? '').isNotEmpty) {
+        continue;
+      }
+      if (existing == null ||
+          (f['revision'] as num? ?? 0) >= (existing['revision'] as num? ?? 0)) {
+        rows[f['id'] as String] = f;
+      }
+    }
+    return rows.values
+        .map((f) => {...f, 'status': focusTaskPhase(f, now)})
+        .toList()
+      ..sort(
+        (a, b) => (a['scheduledStart'] as String).compareTo(
+          b['scheduledStart'] as String,
+        ),
+      );
+  }
+
+  Future<void> actPlanned(
+    Map<String, dynamic> item,
+    String command, {
+    int minutes = 15,
+    String? reason,
+  }) async {
+    if (tasks.any((f) => f['id'] == item['id'])) {
+      await act(
+        command,
+        id: item['id'] as String,
+        minutes: minutes,
+        reason: reason,
+      );
+      return;
+    }
+    // Older occurrences can be shown without registering any notification.
+    // Materialize only the exact occurrence the owner acts on.
+    await api.call('POST', '/v1/focus/actions', {
+      'action': command,
+      if ((item['revision'] as num? ?? 0) > 0)
+        'id': item['id']
+      else
+        'calendarKey': item['calendarKey'],
+      'expectedRevision': item['revision'] ?? 0,
+      'requestId': newId(),
+      'timezoneOffset': DateTime.now().timeZoneOffset.inMinutes,
+      'minutes': minutes,
+      'reason': ?reason,
+    });
+    await sync();
+    await refreshPlanned();
   }
 
   Future<void> preview() async {

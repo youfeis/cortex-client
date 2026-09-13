@@ -273,6 +273,34 @@ void main() {
     expect(api.focus['status'], 'paused');
   });
   test(
+    'A completion queued during a refresh notifies canonical lists after it commits',
+    () async {
+      focus.dispose();
+      var committed = 0;
+      focus = TaskFocus(
+        api: api,
+        changed: () {},
+        canSync: () => true,
+        onCompletionSynced: () => committed++,
+      );
+      await focus.sync();
+      final gate = Completer<void>();
+      api.blockedGet = gate;
+      final refresh = focus.sync();
+      await Future<void>.delayed(Duration.zero);
+      await focus.act('complete').timeout(const Duration(seconds: 1));
+      expect(focus.current!['status'], 'done');
+      expect(committed, 0);
+      api.blockedGet = null;
+      gate.complete();
+      await refresh;
+      await Future<void>.delayed(Duration.zero);
+      await focus.sync();
+      expect(committed, 1);
+      expect(api.focus['status'], 'done');
+    },
+  );
+  test(
     'restore shows the cached card without waiting for the server',
     () async {
       await focus.sync();

@@ -9,6 +9,7 @@ DateTime? nextRoutineDate(Entry r, DateTime now) {
   final anchor = rawAnchor == null
       ? null
       : DateTime.utc(rawAnchor.year, rawAnchor.month, rawAnchor.day);
+  final monthInterval = (r.data['intervalMonths'] as num?)?.toInt();
   final interval = (r.data['intervalWeeks'] as num? ?? 1).toInt();
   if (interval < 1 || interval > 52 || (interval > 1 && anchor == null)) {
     return null;
@@ -20,7 +21,19 @@ DateTime? nextRoutineDate(Entry r, DateTime now) {
     final startDate = DateTime.utc(start.year, start.month, start.day);
     if (startDate.isAfter(date)) date = startDate;
   }
-  for (var i = 0; i < 366; i++, date = date.add(const Duration(days: 1))) {
+  for (var i = 0; i < 735; i++, date = date.add(const Duration(days: 1))) {
+    if (monthInterval != null) {
+      if (anchor == null || monthInterval < 1 || monthInterval > 12) {
+        return null;
+      }
+      final months = (date.year - anchor.year) * 12 + date.month - anchor.month;
+      final lastDay = DateTime.utc(date.year, date.month + 1, 0).day;
+      if (months % monthInterval == 0 &&
+          date.day == anchor.day.clamp(1, lastDay)) {
+        return date;
+      }
+      continue;
+    }
     if (days.isNotEmpty && !days.contains(date.weekday)) continue;
     if (anchor != null &&
         (date.difference(anchor).inDays ~/ 7) % interval != 0) {
@@ -39,12 +52,13 @@ String routineWhen(Entry r, {DateTime? now}) {
       : days.where((d) => d >= 1 && d <= 7).map((d) => names[d - 1]).join(', ');
   final period = switch (r.data['period']) {
     'morning' => 'Morning',
-    'evening' => 'After evening meal',
+    'evening' => 'Evening',
     _ => '',
   };
   final interval = (r.data['intervalWeeks'] as num? ?? 1).toInt();
   final label = period.isEmpty ? cadence : '$cadence · $period';
-  if (interval <= 1) return label;
+  final monthInterval = (r.data['intervalMonths'] as num?)?.toInt();
+  if (interval <= 1 && monthInterval == null) return label;
   final today = now ?? DateTime.now();
   final next = nextRoutineDate(r, today);
   const months = [
@@ -68,17 +82,19 @@ String routineWhen(Entry r, {DateTime? now}) {
             next.day == today.day
       ? ' · Due today'
       : ' · Next ${next.day} ${months[next.month - 1]}';
-  return 'Every $interval weeks · $label$due';
+  return monthInterval != null
+      ? '${monthInterval == 1 ? 'Monthly' : 'Every $monthInterval months'}$due'
+      : 'Every $interval weeks · $label$due';
 }
 
-class MedicalRoutines extends StatefulWidget {
+class DailyRoutines extends StatefulWidget {
   final CortexModel model;
-  const MedicalRoutines({super.key, required this.model});
+  const DailyRoutines({super.key, required this.model});
   @override
-  State<MedicalRoutines> createState() => _MedicalRoutinesState();
+  State<DailyRoutines> createState() => _DailyRoutinesState();
 }
 
-class _MedicalRoutinesState extends State<MedicalRoutines> {
+class _DailyRoutinesState extends State<DailyRoutines> {
   final pending = <String>{};
   CortexModel get model => widget.model;
   Future<void> toggle(Entry routine, bool done) async {
@@ -89,6 +105,7 @@ class _MedicalRoutinesState extends State<MedicalRoutines> {
         'date': day(),
         'done': done,
       });
+      await model.taskFocus.sync();
       await model.refresh();
     });
     if (mounted) setState(() => pending.remove(routine.id));
@@ -99,14 +116,7 @@ class _MedicalRoutinesState extends State<MedicalRoutines> {
     final rows =
         model
             .records('routine')
-            .where(
-              (r) =>
-                  r.data['enabled'] != false &&
-                  (r.data['medical'] == true ||
-                      r.data['kind'] == 'movement' ||
-                      r.data['fitness'] == true ||
-                      r.id == 'routine-daily-voice-feminization'),
-            )
+            .where((r) => r.data['enabled'] != false)
             .toList()
           ..sort((a, b) => routineWhen(a).compareTo(routineWhen(b)));
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -138,7 +148,10 @@ class _MedicalRoutinesState extends State<MedicalRoutines> {
             : null,
         title: Text(
           r.data['title'] as String,
-          style: const TextStyle(fontSize: 14),
+          style: TextStyle(
+            fontSize: 16,
+            decoration: done ? TextDecoration.lineThrough : null,
+          ),
         ),
         subtitle: Text(
           source.isNotEmpty ? '${routineWhen(r)}\n$source' : routineWhen(r),
@@ -157,7 +170,7 @@ class _MedicalRoutinesState extends State<MedicalRoutines> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         sectionHead(
-          'Fitness routines',
+          'Daily routines',
           trailing: Text(
             '${today.where((r) => state(r)['done'] == true).length}/${today.length} today',
             style: const TextStyle(fontSize: 12, color: muted),

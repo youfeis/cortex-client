@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cortex/core/cortex.dart';
 import 'package:cortex/features/fitness/nutrition.dart';
-import 'package:cortex/features/fitness/medical_routines.dart';
+import 'package:cortex/features/time/daily_routines.dart';
 import 'package:cortex/features/time/todos.dart';
 
 class RoutineApi extends CortexApi {
@@ -133,11 +133,20 @@ void main() {
           body: SingleChildScrollView(
             child: AnimatedBuilder(
               animation: model,
-              builder: (_, _) => MedicalRoutines(model: model),
+              builder: (_, _) => DailyRoutines(model: model),
             ),
           ),
         ),
       ),
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          native,
+          (_) async => {'permission': 'authorized'},
+        );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(native, null),
     );
     await tester.tap(find.text('Weigh in'));
     await tester.pumpAndSettle();

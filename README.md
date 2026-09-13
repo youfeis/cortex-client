@@ -221,7 +221,7 @@ photo storage. A food-photo log describes food eaten; the separate library photo
 action saves facts only. Chat handles portions, corrections and future reuse.
 Food facts and meal history stay separate from permanent personal memories.
 
-Fitness routines show today's checkboxes plus a collapsed Other days section.
+Time management has one Daily routines checklist for health, exercise and household routines. Fitness links to it instead of rendering a duplicate. Today's checkboxes include a collapsed Other days section.
 The server matches actual measurements, exact movement routine IDs, and explicit
 chat/checkbox/day-plan completion. Doses never complete from a schedule or meal.
 Source captions explain why a box is checked. A checkbox correction overrides
@@ -230,7 +230,7 @@ are disabled. Day-plan status uses the same routine completion state.
 
 ## Task cards and check-ins
 
-Tell chat “I'm starting…” or tap Start on a to-do/day-plan task. A current-task
+Planned for today lists every tracked timed calendar occurrence, including those outside the Live Activity window and completed items. Start early or mark Done there; existing occurrence IDs preserve the offline action queue. Earlier untracked events are materialized through the signed API only when acted on. Tell chat “I'm starting…” or tap Start on a to-do/calendar task. A current-task
 strip stays in both tabs and opens the full task controls. The task sheet uses
 a fixed Close button above the scrolling list, plus a drag handle;
 the same sheet opens from Live Activity links. Closing it leaves timers running.
@@ -290,8 +290,7 @@ thread; it excludes task titles, chat messages and credentials.
 
 Button actions save locally before syncing with the signed API. App Intents try
 to sync directly; offline/locked-device failures remain queued for the next open.
-Revision checks reject stale actions. The server forwards real starts, extensions
-and postponements to the main chat when idle. Postpone opens a reason sheet;
+Revision checks reject stale actions. Start, Done, Pause, Resume, Cancel and extra time use APIs directly. Only a postponement with a reason is forwarded to chat. Extra time changes the working timer; other calendar times stay in place. Postpone opens a reason sheet;
 expanded reminder notifications also accept a typed/dictated reason.
 
 Reminders fire at the expected finish, after ten minutes, then every fifteen

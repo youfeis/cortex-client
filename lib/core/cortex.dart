@@ -162,6 +162,11 @@ class CortexModel extends ChangeNotifier {
     canSync: () => !_disposed && paired && foreground,
   );
   late final taskFocus = TaskFocus(
+    // An offline button press may finish syncing after its screen has refreshed.
+    // Refresh canonical to-dos/routines once the completion actually commits.
+    onCompletionSynced: () {
+      if (!_disposed) unawaited(refresh().catchError((_) {}));
+    },
     quietHours: () {
       final plans = entries.where((e) => e.kind == 'plan').toList()
         ..sort(

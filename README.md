@@ -28,6 +28,9 @@ unknown values remain unknown. Saved memories survive context compaction.
 
 - Camera and photo library attachments (up to four photos per message).
 - Automatic Apple Health sync after setup: steps, active energy, weight, BP and glucose.
+- Opening or resuming Cortex re-reads Health, including when an earlier sync is
+  still running. Fitness pull-to-refresh does the same. A post-upload snapshot
+  keeps steps, estimated TDEE, food budget and the calorie bar in sync.
 - A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
 - Chat follows the latest message when the iPhone keyboard opens or closes,
   after the resized message list settles. Ordinary history scrolling stays free.
@@ -63,6 +66,11 @@ Meals can be logged from photos using researched, clearly marked estimates. Fitn
 is real server data; an empty log is not treated as a complete food diary.
 Apple Health active energy is shown separately from manual exercise to avoid
 adding a second copy of the same workout into the TDEE estimate.
+The daily Health step total takes priority over chat-entered totals. The energy
+calculation uses the stored baseline TDEE, calories for steps above the stored
+baseline, and logged workouts, then subtracts the stored deficit for the food
+budget. Refreshing never changes the owner's targets. Failed reads retain the
+last saved data and retry automatically; missing Health readings do not mean zero.
 
 ## Fitness trends
 

@@ -200,11 +200,12 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         case "focusOpenAcknowledge": self.defaults.removeObject(forKey: "cortex.focus.openRequest")
         #if targetEnvironment(simulator)
           case "focusTestExpire":
-            // Exercise the real ActivityKit lifecycle in simulator integration tests.
-          // This method is not present in physical iPhone builds.
+            // Expiry ends the activity but leaves its final card on the Lock Screen.
+            // Immediate dismissal skips that state, just like removing the card.
+            // This method is not present in physical iPhone builds.
             if #available(iOS 16.2, *) {
               for activity in Activity<CortexTaskBoardAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
+                await activity.end(nil, dismissalPolicy: .default)
               }
             }
         #endif

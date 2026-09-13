@@ -35,7 +35,16 @@ List<HealthPoint> petWeightPoints(List<Entry> entries, String petId) {
       clock == null ? 0 : int.parse(clock[2]!),
       clock == null ? 0 : int.parse(clock[3]!),
     );
-    points.add(HealthPoint(e.id, date, at, kg.toDouble(), updated: e.updated));
+    points.add(
+      HealthPoint(
+        e.id,
+        date,
+        at,
+        kg.toDouble(),
+        updated: e.updated,
+        note: e.data['notes']?.toString() ?? '',
+      ),
+    );
   }
   points.sort((a, b) {
     final order = a.at.compareTo(b.at);
@@ -140,7 +149,7 @@ class _PetsScreenState extends State<PetsScreen> {
             metric: TrendMetric.weight,
             points: points,
             unit: 'kg',
-            decimalPlaces: 2,
+            decimalPlaces: 3,
             minimumWeightPadding: .05,
             empty: all.isEmpty
                 ? 'No readings for $name yet.'

@@ -5,13 +5,20 @@ import 'package:cortex/features/pets/pets_screen.dart';
 import 'package:cortex/features/space/space_screen.dart';
 import 'package:cortex/features/fitness/trends.dart';
 
-Entry reading(String id, String pet, String date, double kg, {String? at}) =>
-    Entry(id, 'pet_weight', {
-      'petId': pet,
-      'date': date,
-      'kg': kg,
-      'recordedAt': ?at,
-    });
+Entry reading(
+  String id,
+  String pet,
+  String date,
+  double kg, {
+  String? at,
+  String? note,
+}) => Entry(id, 'pet_weight', {
+  'petId': pet,
+  'date': date,
+  'kg': kg,
+  'recordedAt': ?at,
+  'notes': ?note,
+});
 
 void main() {
   test(
@@ -95,7 +102,7 @@ void main() {
       final today = day();
       model.entries = [
         reading('c1', 'cookie', today, 4.25),
-        reading('c2', 'cookie', today, 4.28),
+        reading('c2', 'cookie', today, 4.285, note: '医院；婴儿秤'),
         reading('w1', 'wanwan', today, 6.85),
       ];
       await tester.pumpWidget(
@@ -103,25 +110,27 @@ void main() {
           home: PetsScreen(model: model, onChat: (_, {bool photo = false}) {}),
         ),
       );
-      expect(find.text('4.28'), findsOneWidget);
-      expect(find.text('+0.03 kg in this period'), findsOneWidget);
+      expect(find.text('4.285'), findsOneWidget);
+      expect(find.text('医院；婴儿秤'), findsOneWidget);
+      expect(find.text('+0.035 kg in this period'), findsOneWidget);
       expect(find.text('2 of 2 readings'), findsOneWidget);
       await tester.tap(find.byTooltip('Previous cookie reading'));
       await tester.pump();
-      expect(find.text('4.25'), findsOneWidget);
+      expect(find.text('4.250'), findsOneWidget);
+      expect(find.text('医院；婴儿秤'), findsNothing);
       model.entries.add(reading('c3', 'cookie', today, 4.29));
       model.notifyListeners();
       await tester.pump();
       await tester.tap(find.text('30 days'));
       await tester.pumpAndSettle();
-      expect(find.text('4.29'), findsOneWidget);
+      expect(find.text('4.290'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('Wanwan'),
         300,
         scrollable: find.byType(Scrollable).last,
       );
       await tester.pumpAndSettle();
-      expect(find.text('6.85'), findsOneWidget);
+      expect(find.text('6.850'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       model.dispose();

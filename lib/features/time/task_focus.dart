@@ -335,16 +335,32 @@ class FocusSettings extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               caption(
-                'One Lock Screen card shows two tasks with their own progress bars and buttons. Extra tasks are available in Cortex.',
+                'One Lock Screen card shows two tasks side by side. Each has a progress bar and large buttons. The clock-arrow button postpones a task. Extra tasks open in Cortex.',
               ),
               const SizedBox(height: 8),
               caption(
-                'Check-ins arrive at the expected finish, 10 minutes later, then every 15 minutes. Finish or pause to stop them. Reopening Cortex restores the card and refreshes reminders.',
+                'Check-ins arrive at the expected finish, 10 minutes later, then every 15 minutes. Pausing or postponing stops reminders but keeps the unfinished task on the card. Completing or stopping tracking removes it.',
               ),
               const SizedBox(height: 8),
               caption(
-                'iOS limits each Live Activity to 8 hours. Focus and notification settings control alerts. Planning updates need a connection and may wait until Cortex opens.',
+                'Reopening Cortex restores unfinished tasks, even offline. iOS can remove a card after 8 hours or when you dismiss it. Focus and notification settings control alerts. Planning updates need a connection.',
               ),
+              if (focus.visible) ...[
+                const SizedBox(height: 12),
+                Text(
+                  focus.liveActive
+                      ? 'Task card is available'
+                      : focus.liveState == 'disabled'
+                      ? 'Live Activities are off in iPhone settings'
+                      : 'Task card is not showing',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                FilledButton.icon(
+                  onPressed: () => action(context, focus.restore),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Restore task card'),
+                ),
+              ],
               TextButton(
                 onPressed: () => action(
                   context,

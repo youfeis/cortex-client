@@ -85,6 +85,16 @@ void main() {
         }
         expect(state['liveCount'], 1);
         expect(state['notificationCount'], 40);
+        state =
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [b, a],
+            }) ??
+            {};
+        expect(
+          (state['focuses'] as List).map((f) => f['id']).toList(),
+          [a['id'], b['id']],
+          reason: 'Server edit order must not move the Lock Screen buttons.',
+        );
         for (var i = 0; i < 25; i++) {
           await tester.runAsync(
             () => Future<void>.delayed(const Duration(seconds: 1)),
@@ -132,8 +142,31 @@ void main() {
           throwsA(isA<PlatformException>()),
         );
         await act(b['id'], 'complete');
-        expect(state['liveCount'], 0);
+        expect(
+          state['liveCount'],
+          1,
+          reason: 'Postponed work remains reachable on the card.',
+        );
         expect(state['notificationCount'], 0);
+        state = await native.invokeMethod<Map>('focusRestore') ?? {};
+        expect(state['liveCount'], 1);
+        expect(item(a['id'])['status'], 'postponed');
+        await act(a['id'], 'begin');
+        expect(state['liveCount'], 1);
+        expect(item(a['id'])['status'], 'active');
+        await act(a['id'], 'pause');
+        expect(
+          state['liveCount'],
+          1,
+          reason: 'Pausing stops reminders, not access to the task.',
+        );
+        expect(state['notificationCount'], 0);
+        await act(a['id'], 'cancel');
+        expect(
+          state['liveCount'],
+          0,
+          reason: 'Only completed or cancelled tasks remove the last card.',
+        );
         expect(
           (state['pending'] as List)
               .where((e) => (e as Map)['action'] == 'postpone')
@@ -141,6 +174,21 @@ void main() {
           'Tired, after 4 pm please.',
         );
         await binding.takeScreenshot('task-board-verification');
+        // Future-ready tasks must be visible now, not counted as visible while
+        // ActivityKit has only scheduled a pending activity for their start time.
+        final future = {
+          ...a,
+          'id': 'board-test-future-$base',
+          'scheduledStart': iso(now.add(const Duration(hours: 2))),
+          'expectedEnd': iso(now.add(const Duration(hours: 3))),
+        };
+        state =
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [future],
+            }) ??
+            {};
+        expect(state['liveCount'], 1);
+        expect(state['liveState'], 'active');
       } finally {
         state = await native.invokeMethod<Map>('focusStatus') ?? {};
         for (final request in List<Map>.from(state['pending'] as List)) {

@@ -8,8 +8,6 @@ struct CortexFocusWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: CortexTaskBoardAttributes.self) { context in
       TaskBoardView(state: context.state)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
         .activityBackgroundTint(Color(red: 0.95, green: 0.97, blue: 0.93))
         .activitySystemActionForegroundColor(.black)
         .widgetURL(taskURL("view", context.state.tasks.first))
@@ -24,7 +22,7 @@ struct CortexFocusWidget: Widget {
             Text(timerInterval: task.start...max(task.start, task.end), countsDown: true)
               .monospacedDigit().frame(width: 45)
           } else {
-            Text("Ready").font(.caption)
+            Text(task.status == "ready" ? "Ready" : "Paused").font(.caption)
           }
         }
       } minimal: {
@@ -42,94 +40,108 @@ private struct TaskBoardView: View {
   private var displayed: [CortexTaskBoardAttributes.TaskItem] {
     Array(state.tasks.prefix(2))
   }
-  private var compact: Bool { displayed.count > 1 }
+  private var paired: Bool { displayed.count > 1 }
 
   var body: some View {
-    // iOS may truncate Lock Screen activities above 160 pt. Two rows use the
-    // available height for independent controls instead of a shared selection.
-    VStack(alignment: .leading, spacing: compact ? 3 : 6) {
+    // 144 pt content + 8 pt top/bottom margins = the 160 pt system limit.
+    // Two columns leave each button at least 44 x 44 pt on the owner's iPhone.
+    HStack(alignment: .top, spacing: 8) {
       ForEach(displayed) { task in
         if task.id != displayed.first?.id {
-          Divider().overlay(ink.opacity(0.15))
+          Rectangle().fill(ink.opacity(0.22)).frame(width: 1)
         }
-        VStack(alignment: .leading, spacing: compact ? 3 : 7) {
-          HStack(spacing: 6) {
-            Text(task.title)
-              .font(.system(size: compact ? 13 : 15, weight: .semibold))
-              .lineLimit(1)
-            Spacer(minLength: 4)
+        VStack(spacing: 5) {
+          HStack(spacing: 4) {
+            Link(destination: taskURL("view", task)) {
+              Text(task.title).font(.system(size: paired ? 16 : 17, weight: .semibold))
+                .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            }.accessibilityLabel("Open task: \(task.title)")
             if task.id == displayed.first?.id && state.tasks.count > 2 {
-              Link("+\(state.tasks.count - 2) in app", destination: taskURL("view", task))
-                .font(.system(size: 11, weight: .semibold))
+              Link("+\(state.tasks.count - 2)", destination: taskURL("view", task))
+                .font(.system(size: 14, weight: .semibold))
                 .accessibilityLabel("Show all \(state.tasks.count) tasks in Cortex")
             }
-            if task.status == "active" {
-              Text(timerInterval: task.start...max(task.start, task.end), countsDown: true)
-                .monospacedDigit().frame(width: 52, alignment: .trailing)
-                .font(.system(size: compact ? 12 : 14, weight: .medium))
-            } else {
-              Text("Ready").font(.system(size: compact ? 12 : 14))
-            }
-          }
+          }.frame(height: 20)
           progress(task)
           controls(task)
-        }
+        }.frame(maxWidth: .infinity)
       }
-    }.foregroundStyle(ink)
+    }
+    .padding(.horizontal, 14).padding(.vertical, 8)
+    .frame(height: 160).foregroundStyle(ink)
   }
 
   private func progress(_ task: CortexTaskBoardAttributes.TaskItem) -> some View {
-    Group {
+    ZStack {
+      RoundedRectangle(cornerRadius: 5).fill(ink.opacity(0.08))
       if task.status == "active" {
         ProgressView(
           timerInterval: task.start...max(task.start.addingTimeInterval(1), task.end),
           countsDown: true
-        ).labelsHidden()
+        ).labelsHidden().tint(ink.opacity(0.3)).scaleEffect(x: 1, y: 5)
+        Text(timerInterval: task.start...max(task.start, task.end), countsDown: true)
+          .monospacedDigit().multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity).padding(.horizontal, 6)
           .accessibilityLabel("Remaining planned time for \(task.title)")
       } else {
-        ProgressView(value: 1, total: 1)
-          .accessibilityLabel("\(task.title) is ready; timer has not started")
+        Text(
+          task.status == "ready"
+            ? "Ready to start" : task.status == "postponed" ? "Postponed" : "Paused"
+        )
+        .accessibilityLabel("\(task.title): \(task.status). Timer is stopped.")
       }
     }
-    .tint(task.status == "active" ? ink : ink.opacity(0.3))
-    .scaleEffect(x: 1, y: compact ? 1.5 : 2)
-    .frame(height: compact ? 6 : 8)
+    .font(.system(size: 14, weight: .semibold))
+    .frame(height: 20).clipShape(RoundedRectangle(cornerRadius: 5))
   }
 
   private func controls(_ task: CortexTaskBoardAttributes.TaskItem) -> some View {
-    VStack(spacing: 7) {
-      HStack(spacing: compact ? 4 : 7) {
+    VStack(spacing: 6) {
+      HStack(spacing: 6) {
         direct(
-          task.status == "ready" ? "I’ve started" : "Completed!",
-          task.status == "ready" ? "begin" : "complete", task, primary: true)
-        if compact && task.status == "active" { extensions(task) }
-        Link(destination: taskURL("postpone", task)) { face("Postpone") }
-          .accessibilityLabel("Postpone \(task.title) and give a reason")
-        if task.status == "active" { direct("Break", "pause", task, symbol: "pause.fill") }
+          task.status == "active"
+            ? (paired ? "Done" : "Completed!") : task.status == "ready" ? "Start" : "Resume",
+          task.status == "active" ? "complete" : "begin", task, primary: true)
+        Link(destination: taskURL("postpone", task)) {
+          face("Postpone", symbol: paired ? "clock.arrow.circlepath" : nil)
+        }
+        .accessibilityLabel("Postpone \(task.title) and give a reason")
+        if task.status == "active" {
+          direct("Pause", "pause", task, symbol: "pause.fill")
+        } else {
+          Link(destination: taskURL("view", task)) { face("More", symbol: "ellipsis") }
+            .accessibilityLabel("More controls for \(task.title)")
+        }
       }
-      if !compact && task.status == "active" {
-        HStack(spacing: 7) { extensions(task) }
+      if task.status == "active" {
+        HStack(spacing: 6) { extensions(task) }
+      } else {
+        Text(
+          task.status == "ready"
+            ? "Tap Start when you’re ready." : "Still here. Resume when you’re ready."
+        )
+        .font(.system(size: 14)).foregroundStyle(ink.opacity(0.75))
+        .lineLimit(2).frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
       }
-    }.font(.system(size: compact ? 11 : 13, weight: .semibold))
+    }.font(.system(size: paired ? 15 : 16, weight: .semibold))
   }
 
   private func extensions(_ task: CortexTaskBoardAttributes.TaskItem) -> some View {
     ForEach([5, 10, 15], id: \.self) { minutes in
       direct(
-        compact ? "+\(minutes)" : "+\(minutes) min", "extend", task, minutes: minutes)
+        paired ? "+\(minutes)" : "+\(minutes) min", "extend", task, minutes: minutes)
     }
   }
 
   private func face(_ title: String, symbol: String? = nil, primary: Bool = false) -> some View {
     Group {
       if let symbol {
-        Image(systemName: symbol).frame(width: compact ? 28 : 40)
+        Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
       } else {
-        Text(title).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-          .padding(.horizontal, compact ? 6 : 10).frame(maxWidth: .infinity)
+        Text(title).lineLimit(1).minimumScaleFactor(0.8)
       }
     }
-    .frame(height: compact ? 34 : 38)
+    .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
     .foregroundStyle(primary ? (dark ? Color.black : Color.white) : ink)
     .background(primary ? ink : ink.opacity(0.09), in: Capsule())
     .contentShape(Capsule())

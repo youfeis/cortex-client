@@ -4,6 +4,64 @@ import '../../app/ui.dart';
 import '../../core/cortex.dart';
 import '../../main.dart';
 
+Future<void> showFocusSheet(BuildContext context, CortexModel model) {
+  FocusScope.of(context).unfocus();
+  return showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * .9,
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Your tasks',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  style: TextButton.styleFrom(minimumSize: const Size(96, 48)),
+                  icon: const Icon(Icons.close, size: 20),
+                  label: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: FocusPanel(
+                model: model,
+                showHeading: false,
+                onFinished: () {
+                  if (sheetContext.mounted && !model.taskFocus.visible) {
+                    Navigator.pop(sheetContext);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Future<void> postponeFocus(
   BuildContext context,
   CortexModel model,
@@ -77,10 +135,12 @@ class FocusPanel extends StatefulWidget {
     super.key,
     required this.model,
     this.compact = false,
+    this.showHeading = true,
     this.onFinished,
   });
   final CortexModel model;
   final bool compact;
+  final bool showHeading;
   final VoidCallback? onFinished;
   @override
   State<FocusPanel> createState() => _FocusPanelState();
@@ -113,22 +173,7 @@ class _FocusPanelState extends State<FocusPanel> {
         return Material(
           color: soft,
           child: InkWell(
-            onTap: () => showModalBottomSheet<void>(
-              context: context,
-              useSafeArea: true,
-              isScrollControlled: true,
-              builder: (sheetContext) => SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: FocusPanel(
-                    model: widget.model,
-                    onFinished: () {
-                      if (!focus.visible) Navigator.pop(sheetContext);
-                    },
-                  ),
-                ),
-              ),
-            ),
+            onTap: () => showFocusSheet(context, widget.model),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -170,9 +215,12 @@ class _FocusPanelState extends State<FocusPanel> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          sectionHead(
-            items.length == 1 ? 'Your current task' : 'Your overlapping tasks',
-          ),
+          if (widget.showHeading)
+            sectionHead(
+              items.length == 1
+                  ? 'Your current task'
+                  : 'Your overlapping tasks',
+            ),
           for (final item in items)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -220,8 +268,10 @@ class _FocusPanelState extends State<FocusPanel> {
               : 'Postponed · Cortex will review your reason in chat.')
         : 'Paused. A break is okay.';
     Future<void> respond(String command, [int minutes = 15]) async {
+      final model = widget.model;
       await focus.act(command, id: item['id'] as String, minutes: minutes);
-      await widget.model.refresh().catchError((_) {});
+      await model.refresh().catchError((_) {});
+      if (!mounted) return;
       if (command == 'complete' || command == 'cancel') {
         widget.onFinished?.call();
       }

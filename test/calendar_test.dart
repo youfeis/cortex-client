@@ -29,7 +29,7 @@ class CalendarApi extends CortexApi {
           'error': 'Link a Google account to start sync.',
       };
     }
-    expect(path, '/v1/snapshot');
+    expect(path, '/v1/snapshot?date=${day()}');
     refreshes++;
     return {'records': [], 'messages': [], 'sessions': [], 'chat': {}};
   }

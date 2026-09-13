@@ -198,10 +198,10 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         case "focusPreviewAcknowledge":
           self.defaults.removeObject(forKey: "cortex.focus.previewRequest")
         case "focusOpenAcknowledge": self.defaults.removeObject(forKey: "cortex.focus.openRequest")
-        #if DEBUG
+        #if targetEnvironment(simulator)
           case "focusTestExpire":
             // Exercise the real ActivityKit lifecycle in simulator integration tests.
-            // This method is not present in signed release builds.
+          // This method is not present in physical iPhone builds.
             if #available(iOS 16.2, *) {
               for activity in Activity<CortexTaskBoardAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)

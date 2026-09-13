@@ -111,8 +111,9 @@ void main() {
           );
           state = await native.invokeMethod<Map>('focusStatus') ?? {};
           if (state['liveCount'] == 1 &&
-              state['liveActivityID'] != previousActivity)
+              state['liveActivityID'] != previousActivity) {
             break;
+          }
         }
         expect(
           state['liveCount'],

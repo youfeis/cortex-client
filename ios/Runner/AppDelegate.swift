@@ -48,7 +48,7 @@ import HealthKit
         }
       case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge", "focusRestore", "focusPreview", "focusPreviewAcknowledge", "focusOpenAcknowledge":
         CortexFocus.shared.handle(call.method, call.arguments as? [String: Any] ?? [:], result)
-#if DEBUG
+#if targetEnvironment(simulator)
       case "focusTestExpire":
         CortexFocus.shared.handle(call.method, [:], result)
 #endif

@@ -29,6 +29,8 @@ unknown values remain unknown. Saved memories survive context compaction.
 - Camera and photo library attachments (up to four photos per message).
 - Automatic Apple Health sync after setup: steps, active energy, weight, BP and glucose.
 - A Hide keyboard accessory above the iPhone keyboard, including numeric fields.
+- Chat follows the latest message when the iPhone keyboard opens or closes,
+  after the resized message list settles. Ordinary history scrolling stays free.
 - Google Calendar is the master source: personal/work accounts link in Settings.
 - One calendar selection is stored on the server and shared by all devices.
 - The next 30 days sync every five minutes on the server, including while Cortex

@@ -27,21 +27,71 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => ChatScreenState();
 }
 
-class ChatScreenState extends State<ChatScreen> {
+class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final draft = TextEditingController(), scroll = ScrollController();
   final focus = FocusNode();
   final images = <Attachment>[];
   bool sending = false;
   String? error;
   int previousCount = 0;
+  double? _keyboardInset;
+  bool _chatKeyboardActive = false;
+  bool _followingKeyboard = false;
+  bool _keyboardScrollQueued = false;
+  Timer? _keyboardSettled;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.model.addListener(changed);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Scaffold removes the consumed keyboard inset from its body's MediaQuery.
+    // Read the actual Flutter view so both opening and dismissal are detected.
+    _keyboardInset ??= View.of(context).viewInsets.bottom;
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final inset = View.of(context).viewInsets.bottom;
+    if (inset == _keyboardInset) return;
+    _keyboardInset = inset;
+    if (!focus.hasFocus && !_chatKeyboardActive) return;
+    _chatKeyboardActive = inset > 0;
+    _followingKeyboard = true;
+    _queueKeyboardScroll();
+    _keyboardSettled?.cancel();
+    _keyboardSettled = Timer(const Duration(milliseconds: 350), () {
+      _queueKeyboardScroll();
+      // Keep following layout changes through the last keyboard animation frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _followingKeyboard = false;
+      });
+      WidgetsBinding.instance.scheduleFrame();
+    });
+  }
+
+  void _queueKeyboardScroll() {
+    if (!_followingKeyboard || _keyboardScrollQueued) return;
+    _keyboardScrollQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _keyboardScrollQueued = false;
+      if (!mounted || !_followingKeyboard || !scroll.hasClients) return;
+      final position = scroll.position;
+      if ((position.pixels - position.maxScrollExtent).abs() > 0.5) {
+        scroll.jumpTo(position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _keyboardSettled?.cancel();
     widget.model.removeListener(changed);
     draft.dispose();
     scroll.dispose();
@@ -216,109 +266,116 @@ class ChatScreenState extends State<ChatScreen> {
           ],
         ),
         'conversation': Expanded(
-          child: ListView(
-            controller: scroll,
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            children: [
-              if (m.messages.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 50),
-                  child: Column(
-                    children: [
-                      const CortexAvatar(size: 58),
-                      const SizedBox(height: 18),
-                      titleText('What’s on your mind?'),
-                      const SizedBox(height: 12),
-                      caption(
-                        'Tell me what happened, send a food photo,\nor ask me to help with your day.',
-                      ),
-                    ],
+          child: NotificationListener<ScrollMetricsNotification>(
+            onNotification: (_) {
+              // Long messages and image rows can change the extent after resize.
+              _queueKeyboardScroll();
+              return false;
+            },
+            child: ListView(
+              controller: scroll,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              children: [
+                if (m.messages.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 50),
+                    child: Column(
+                      children: [
+                        const CortexAvatar(size: 58),
+                        const SizedBox(height: 18),
+                        titleText('What’s on your mind?'),
+                        const SizedBox(height: 12),
+                        caption(
+                          'Tell me what happened, send a food photo,\nor ask me to help with your day.',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              for (final message in m.messages)
-                RemoteLayout(
-                  page: message['role'] == 'user'
-                      ? 'userMessage'
-                      : 'assistantMessage',
-                  slots: {
-                    'content': messageContent(
-                      m,
-                      message['role'] == 'user',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (((message['images'] ?? []) as List).isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  for (final id in message['images'] as List)
-                                    Photo(
-                                      model: m,
-                                      id: id as String,
-                                      size: 105,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          if ((message['text'] as String? ?? '').isNotEmpty)
-                            MarkdownBody(
-                              data: message['text'] as String,
-                              selectable: true,
-                              styleSheet: MarkdownStyleSheet(
-                                p: const TextStyle(
-                                  fontSize: 15,
-                                  color: ink,
-                                  height: 1.5,
+                for (final message in m.messages)
+                  RemoteLayout(
+                    page: message['role'] == 'user'
+                        ? 'userMessage'
+                        : 'assistantMessage',
+                    slots: {
+                      'content': messageContent(
+                        m,
+                        message['role'] == 'user',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (((message['images'] ?? []) as List).isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final id in message['images'] as List)
+                                      Photo(
+                                        model: m,
+                                        id: id as String,
+                                        size: 105,
+                                      ),
+                                  ],
                                 ),
                               ),
-                              onTapLink: (_, href, _) {
-                                if (href != null &&
-                                    Uri.tryParse(href)?.scheme == 'https') {
-                                  launchUrl(
-                                    Uri.parse(href),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  },
-                ),
-              if ((m.chat['text'] as String? ?? '').isNotEmpty)
-                Panel(
-                  child: messageContent(
-                    m,
-                    false,
-                    child: MarkdownBody(data: m.chat['text'] as String),
-                  ),
-                ),
-              if (m.busy && (m.chat['text'] as String? ?? '').isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 13,
-                        height: 13,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: caption(
-                          (m.chat['helper'] as String? ?? '').isNotEmpty
-                              ? m.chat['helper'] as String
-                              : '$status…',
+                            if ((message['text'] as String? ?? '').isNotEmpty)
+                              MarkdownBody(
+                                data: message['text'] as String,
+                                selectable: true,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: const TextStyle(
+                                    fontSize: 15,
+                                    color: ink,
+                                    height: 1.5,
+                                  ),
+                                ),
+                                onTapLink: (_, href, _) {
+                                  if (href != null &&
+                                      Uri.tryParse(href)?.scheme == 'https') {
+                                    launchUrl(
+                                      Uri.parse(href),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  }
+                                },
+                              ),
+                          ],
                         ),
                       ),
-                    ],
+                    },
                   ),
-                ),
-            ],
+                if ((m.chat['text'] as String? ?? '').isNotEmpty)
+                  Panel(
+                    child: messageContent(
+                      m,
+                      false,
+                      child: MarkdownBody(data: m.chat['text'] as String),
+                    ),
+                  ),
+                if (m.busy && (m.chat['text'] as String? ?? '').isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 13,
+                          height: 13,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: caption(
+                            (m.chat['helper'] as String? ?? '').isNotEmpty
+                                ? m.chat['helper'] as String
+                                : '$status…',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         'error': Column(

@@ -11,14 +11,15 @@ struct CortexFocusWidget: Widget {
           Label("Cortex · Current task", systemImage: "leaf.fill").font(.caption)
           Spacer()
           Text(context.attributes.startedAt, style: .timer).monospacedDigit().font(.caption)
+            .frame(width: 60, alignment: .trailing)
         }.foregroundStyle(Color(red: 0.20, green: 0.32, blue: 0.25))
-        Text(context.attributes.title).font(.headline).lineLimit(2)
+        Text(context.attributes.title).font(.headline).lineLimit(2).foregroundStyle(Color.black)
         Text(
           context.isStale
             ? "Still unconfirmed. Open Cortex to refresh check-ins."
             : "One thing at a time. You can take a break."
         )
-        .font(.caption).foregroundStyle(.secondary)
+        .font(.caption).foregroundStyle(Color.black.opacity(0.65))
         HStack(spacing: 18) {
           action("Done", "checkmark.circle", "complete", context)
           action("Still working", "clock.arrow.circlepath", "extend", context)
@@ -38,11 +39,11 @@ struct CortexFocusWidget: Widget {
           VStack(alignment: .leading, spacing: 10) {
             Text(context.attributes.title).font(.headline).lineLimit(1)
             HStack {
-              action("Done", "checkmark.circle", "complete", context)
+              action("Done", "checkmark.circle", "complete", context, color: .white)
               Spacer()
-              action("More time", "clock", "extend", context)
+              action("More time", "clock", "extend", context, color: .white)
               Spacer()
-              action("Break", "pause.circle", "pause", context)
+              action("Break", "pause.circle", "pause", context, color: .white)
             }.font(.caption)
           }
         }
@@ -69,9 +70,10 @@ struct CortexFocusWidget: Widget {
   }
   func action(
     _ title: String, _ icon: String, _ action: String,
-    _ context: ActivityViewContext<CortexFocusAttributes>
+    _ context: ActivityViewContext<CortexFocusAttributes>,
+    color: Color = Color(red: 0.16, green: 0.29, blue: 0.21)
   ) -> some View {
     Link(destination: url(action, context)) { Label(title, systemImage: icon) }
-      .foregroundStyle(Color(red: 0.16, green: 0.29, blue: 0.21))
+      .foregroundStyle(color)
   }
 }

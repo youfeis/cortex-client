@@ -19,6 +19,19 @@ void main() {
       fail('Screen did not become ready');
     }
 
+    Future<void> dismissNotices() async {
+      // A fresh simulator can have a backlog of legitimate memory notices.
+      // Dismiss the local banners so they cannot intercept camera/menu taps.
+      for (var i = 0; i < 30; i++) {
+        final banner = find.byType(SnackBar);
+        if (banner.evaluate().isEmpty) return;
+        ScaffoldMessenger.of(
+          tester.element(banner.first),
+        ).removeCurrentSnackBar();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+    }
+
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(seconds: 1));
       if (find.byKey(const Key('pairing-code')).evaluate().isNotEmpty ||
@@ -43,6 +56,7 @@ void main() {
     await tester.pumpAndSettle();
     await waitFor(find.textContaining('Resets '));
     await tester.pumpAndSettle();
+    await dismissNotices();
     await binding.takeScreenshot('chat');
     await tester.enterText(
       find.byType(TextField),
@@ -126,6 +140,12 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).last,
     );
+    await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.byTooltip('Choose calendars')),
+      alignment: 0.35,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Choose calendars'));
     await tester.pumpAndSettle();
     expect(find.text('Personal, work, all together.'), findsOneWidget);
@@ -141,6 +161,7 @@ void main() {
       findsOneWidget,
     );
     await tester.enterText(find.byType(TextField), '');
+    await dismissNotices();
     await tester.tap(find.byTooltip('Camera or photo library'));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Take a photo'), findsOneWidget);

@@ -30,8 +30,10 @@ class TaskFocus {
     required this.changed,
     required this.canSync,
     this.quietHours,
+    this.onCompletionSynced,
   });
   final CortexApi api;
+  final void Function()? onCompletionSynced;
   final void Function() changed;
   final bool Function() canSync;
   final Map<String, dynamic>? Function()? quietHours;
@@ -117,6 +119,7 @@ class TaskFocus {
         var discarded = false;
         try {
           await api.call('POST', '/v1/focus/actions', input);
+          if (input['action'] == 'complete') onCompletionSynced?.call();
         } on ApiException catch (e) {
           if (e.status != 409 && e.status != 400) rethrow;
           discarded = true;

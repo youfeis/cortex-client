@@ -289,6 +289,52 @@ void main() {
     },
   );
   testWidgets(
+    'A long task sheet can be closed after scrolling without stopping work',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final model = CortexModel();
+      model.taskFocus.tasks = [
+        for (var i = 0; i < 8; i++)
+          {...local, 'id': 'task-$i', 'title': 'Work in progress $i'},
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: FocusPanel(model: model, compact: true)),
+        ),
+      );
+      await tester.tap(find.text('Tap to review your task timers'));
+      await tester.pumpAndSettle();
+      final close = find.widgetWithText(TextButton, 'Close');
+      final before = tester.getRect(close);
+      expect(before.height, greaterThanOrEqualTo(48));
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, -1200),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getRect(close), before);
+      expect(close.hitTestable(), findsOneWidget);
+      await tester.tap(close);
+      await tester.pumpAndSettle();
+      expect(find.text('Your tasks'), findsNothing);
+      expect(
+        find.text('Tap to review your task timers').hitTestable(),
+        findsOneWidget,
+      );
+      expect(model.taskFocus.tasks, hasLength(8));
+      expect(
+        model.taskFocus.tasks.map((f) => f['status']),
+        everyElement('active'),
+      );
+      expect(pending, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      model.dispose();
+    },
+  );
+  testWidgets(
     'current task offers done, more time, and break without an edit form',
     (tester) async {
       final model = CortexModel();

@@ -51,17 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (request['action'] == 'postpone' && item != null) {
           await postponeFocus(context, widget.model, item);
         } else {
-          await showModalBottomSheet<void>(
-            context: context,
-            useSafeArea: true,
-            isScrollControlled: true,
-            builder: (_) => SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: FocusPanel(model: widget.model),
-              ),
-            ),
-          );
+          await showFocusSheet(context, widget.model);
         }
         _showingTask = false;
       });

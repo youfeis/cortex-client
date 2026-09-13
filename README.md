@@ -231,8 +231,10 @@ are disabled. Day-plan status uses the same routine completion state.
 ## Task cards and check-ins
 
 Tell chat “I'm starting…” or tap Start on a to-do/day-plan task. A current-task
-strip stays in both tabs and opens the full task controls. Completing a linked
-task completes its to-do. Pausing/postponing stops reminders without completing
+strip stays in both tabs and opens the full task controls. The task sheet uses
+a fixed Close button above the scrolling list, plus a drag handle;
+the same sheet opens from Live Activity links. Closing it leaves timers running.
+Completing a linked task completes its to-do. Pausing/postponing stops reminders without completing
 work; silence never marks a task done. Google Calendar changes require planning.
 
 Overlapping tasks share one 160-point native Live Activity. Two columns show

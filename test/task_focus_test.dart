@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cortex/core/cortex.dart';
@@ -6,6 +7,7 @@ import 'package:cortex/features/time/task_focus.dart';
 
 class FocusApi extends CortexApi {
   bool offline = false, conflict = false;
+  Completer<void>? blockedGet;
   Map<String, dynamic> focus = {
     'id': 'task-focus',
     'revision': 1,
@@ -16,6 +18,7 @@ class FocusApi extends CortexApi {
   final acks = <Map>[];
   @override
   Future<dynamic> call(String method, String path, [Object? body]) async {
+    if (method == 'GET' && blockedGet != null) await blockedGet!.future;
     if (offline) throw Exception('offline');
     if (path.endsWith('/actions')) {
       if (conflict) throw ApiException(409, 'Task changed');
@@ -135,6 +138,22 @@ void main() {
     expect(focus.pending, isFalse);
     expect(focus.error, contains('changed'));
   });
+  test('a slow refresh cannot delay an offline pause', () async {
+    await focus.sync();
+    final gate = Completer<void>();
+    api.blockedGet = gate;
+    final refresh = focus.sync();
+    await Future<void>.delayed(Duration.zero);
+    await focus.act('pause').timeout(const Duration(seconds: 1));
+    expect(focus.current!['status'], 'paused');
+    expect(focus.pending, isTrue);
+    api.blockedGet = null;
+    gate.complete();
+    await refresh;
+    await Future<void>.delayed(Duration.zero);
+    await focus.sync();
+    expect(api.focus['status'], 'paused');
+  });
   testWidgets(
     'current task offers done, more time, and break without an edit form',
     (tester) async {
@@ -146,9 +165,9 @@ void main() {
         ),
       );
       expect(find.text('Laundry'), findsOneWidget);
-      expect(find.text('Done'), findsOneWidget);
-      expect(find.text('Still working'), findsOneWidget);
-      expect(find.text('Need a break'), findsOneWidget);
+      expect(find.text('Completed!'), findsOneWidget);
+      expect(find.text('+5 min'), findsOneWidget);
+      expect(find.text('Take a break'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       model.dispose();
     },

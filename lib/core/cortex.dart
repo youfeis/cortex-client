@@ -162,6 +162,19 @@ class CortexModel extends ChangeNotifier {
     canSync: () => !_disposed && paired && foreground,
   );
   late final taskFocus = TaskFocus(
+    quietHours: () {
+      final plans = entries.where((e) => e.kind == 'plan').toList()
+        ..sort(
+          (a, b) => (b.data['date'] as String? ?? '').compareTo(
+            a.data['date'] as String? ?? '',
+          ),
+        );
+      if (plans.isEmpty) return null;
+      return {
+        'wake': plans.first.data['wake'],
+        'bedtime': plans.first.data['bedtime'],
+      };
+    },
     api: api,
     changed: notifyListeners,
     canSync: () => !_disposed && paired && foreground,
@@ -345,7 +358,7 @@ class CortexModel extends ChangeNotifier {
   void startServices() {
     native.setMethodCallHandler((call) async {
       if (call.method == 'focusChanged') {
-        unawaited(taskFocus.sync());
+        unawaited(taskFocus.sync(afterAction: true));
       }
       if (call.method == 'alarmsChanged') {
         unawaited(alarms.sync());

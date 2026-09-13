@@ -20,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int tab = 0;
   final chatKey = GlobalKey<ChatScreenState>();
   bool _showingMemory = false;
+  bool _showingTask = false;
   @override
   void initState() {
     super.initState();
@@ -34,6 +35,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _memoryChanged() {
+    final request = widget.model.taskFocus.openRequest;
+    if (mounted &&
+        !_showingTask &&
+        widget.model.foreground &&
+        request != null) {
+      _showingTask = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final item = widget.model.taskFocus.visibleTasks
+            .where((f) => f['id'] == request['id'])
+            .firstOrNull;
+        await widget.model.taskFocus.acknowledgeOpen();
+        if (!mounted) return;
+        if (request['action'] == 'postpone' && item != null) {
+          await postponeFocus(context, widget.model, item);
+        } else {
+          await showModalBottomSheet<void>(
+            context: context,
+            useSafeArea: true,
+            isScrollControlled: true,
+            builder: (_) => SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: FocusPanel(model: widget.model),
+              ),
+            ),
+          );
+        }
+        _showingTask = false;
+      });
+    }
+
     if (!mounted ||
         _showingMemory ||
         !widget.model.foreground ||

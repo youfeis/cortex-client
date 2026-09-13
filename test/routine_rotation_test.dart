@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cortex/core/cortex.dart';
-import 'package:cortex/features/fitness/medical_routines.dart';
+import 'package:cortex/features/time/daily_routines.dart';
 
 void main() {
   final left = Entry('left', 'routine', {
@@ -54,6 +54,15 @@ void main() {
       );
     },
   );
+  test('Monthly routine uses calendar months and start dates', () {
+    final r = Entry('mop', 'routine', {
+      'intervalMonths': 1,
+      'anchorDate': '2026-01-31',
+    });
+    expect(nextRoutineDate(r, DateTime(2026, 2, 1)), DateTime.utc(2026, 2, 28));
+    expect(nextRoutineDate(r, DateTime(2026, 3, 1)), DateTime.utc(2026, 3, 31));
+    expect(routineWhen(r, now: DateTime(2026, 2, 1)), 'Monthly · Next 28 Feb');
+  });
   test('Daily routines keep their existing label', () {
     expect(
       routineWhen(Entry('daily', 'routine', {'period': 'morning'})),

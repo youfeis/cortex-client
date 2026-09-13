@@ -1,5 +1,5 @@
 import 'nutrition.dart';
-import 'medical_routines.dart';
+import '../time/time_screen.dart';
 import 'health_access.dart';
 import 'energy.dart';
 import '../../remote_ui/remote_layout.dart';
@@ -426,7 +426,20 @@ class FitnessScreen extends StatelessWidget {
                       children: [
                         const SizedBox(height: 12),
                         HealthAccess(model: model),
-                        MedicalRoutines(model: model),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  TimeScreen(model: model, onChat: onChat),
+                            ),
+                          ),
+                          icon: const Icon(Icons.checklist),
+                          label: const Text('Daily routines · Time management'),
+                        ),
+                        caption(
+                          'Health, movement and everyday routines share one checklist. Matching records update it automatically.',
+                        ),
                       ],
                     ),
                     'meals': FoodToday(

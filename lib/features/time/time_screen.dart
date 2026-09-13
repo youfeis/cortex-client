@@ -1,10 +1,9 @@
 import 'task_focus.dart';
 import 'alarms.dart';
-import '../fitness/medical_routines.dart';
+import 'daily_routines.dart';
 import '../../remote_ui/remote_layout.dart';
 import 'package:flutter/material.dart';
 import '../../core/cortex.dart';
-import '../../main.dart';
 import '../../app/ui.dart';
 import 'calendars.dart';
 import 'todos.dart';
@@ -37,36 +36,20 @@ class TimeScreen extends StatelessWidget {
           .where((e) => e.id == 'plan-${day()}')
           .toList();
       final plan = plans.isEmpty ? null : plans.first;
-      final blocks = ((plan?.data['blocks'] ?? []) as List)
-          .map((b) => Map<String, dynamic>.from(b as Map))
-          .toList();
-      for (final b in blocks) {
-        if (model
-            .records('task')
-            .any((t) => t.id == b['taskId'] && t.data['done'] == true)) {
-          b['done'] = true;
-        }
-        final state = model.routineStates[b['routineId'] ?? b['id']];
-        if (state is Map && state['date'] == day()) {
-          b['done'] = state['done'] == true;
-        }
-      }
-      final now = DateTime.now().hour * 60 + DateTime.now().minute;
-      final upcoming = blocks
-          .where((b) => b['done'] != true && (b['end'] as num) > now)
-          .toList();
 
       return Scaffold(
         appBar: AppBar(title: const Text('Time management')),
         body: RefreshIndicator(
-          onRefresh: model.refresh,
+          onRefresh: () async {
+            await model.taskFocus.sync();
+            await model.refresh();
+          },
           child: RemoteLayout(
             page: 'time',
             slots: {
               'intro': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FocusPanel(model: model),
                   label(day()),
                   const SizedBox(height: 10),
                   titleText('A day you can actually live.'),
@@ -81,176 +64,52 @@ class TimeScreen extends StatelessWidget {
               'plan': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 24),
+                  sectionHead('Planned for today'),
+                  caption(
+                    'Start early or mark anything done here. Live Activities appear 30 minutes before the planned start, or when you start early.',
+                  ),
+                  const SizedBox(height: 12),
+                  if (model.taskFocus.plannedForToday().isEmpty)
+                    const Panel(
+                      child: Text('No timed tasks loaded for today yet.'),
+                    ),
+                  FocusPanel(
+                    model: model,
+                    items: model.taskFocus.plannedForToday(),
+                    planned: true,
+                    showHeading: false,
+                  ),
+                  if (model.taskFocus.plannedError != null)
+                    caption(model.taskFocus.plannedError!),
                   if (plan == null)
-                    Panel(
-                      color: soft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.wb_sunny_outlined,
-                            color: muted,
-                            size: 30,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Start where you are.',
-                            style: TextStyle(
-                              fontSize: 23,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          caption(
-                            'Tell me you’re awake. We’ll make room for tasks, meals, movement, and something just for you.',
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: () => checkIn(context),
-                              child: const Text('I’m awake · arrange my day'),
-                            ),
-                          ),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: FilledButton.icon(
+                        onPressed: () => checkIn(context),
+                        icon: const Icon(Icons.wb_sunny_outlined),
+                        label: const Text('I’m awake · arrange my day'),
                       ),
                     )
-                  else ...[
-                    if (plan.data['calendarStatus'] == 'publishing')
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          'Saving your day to Google Calendar… Check chat for progress.',
-                        ),
-                      ),
-                    if (upcoming.isNotEmpty)
-                      Panel(
-                        color: soft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            label('JUST THE NEXT STEP'),
-                            const SizedBox(height: 12),
-                            Text(
-                              upcoming.first['title'] as String,
-                              style: const TextStyle(
-                                fontSize: 25,
-                                height: 1.2,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            caption(
-                              '${planClock((upcoming.first['start'] as num).toInt())} – ${planClock((upcoming.first['end'] as num).toInt())}',
-                            ),
-                            const SizedBox(height: 20),
-                            FilledButton.icon(
-                              onPressed: () =>
-                                  startBlock(context, upcoming.first),
-                              icon: const Icon(Icons.play_arrow),
-                              label: const Text('Start this task'),
-                            ),
-                            FilledButton.icon(
-                              onPressed: () => complete(
-                                context,
-                                plan,
-                                blocks,
-                                upcoming.first,
-                              ),
-                              icon: const Icon(Icons.check, size: 19),
-                              label: const Text('Done with this'),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      const Panel(
-                        color: soft,
-                        child: Text(
-                          'No more scheduled steps right now. Take a breath.',
-                        ),
-                      ),
-                    sectionHead('Coming up'),
-                    for (final b in upcoming.skip(1).take(3)) blockRow(b),
-                    if (blocks.isNotEmpty)
-                      ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        title: const Text('See the whole day'),
-                        children: [for (final b in blocks) blockRow(b)],
-                      ),
-                    if (((plan.data['unscheduled'] ?? []) as List)
-                        .isNotEmpty) ...[
-                      sectionHead('Needs another time'),
-                      Panel(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final text in plan.data['unscheduled'] as List)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Text('• $text'),
-                              ),
-                            caption(
-                              'We can shorten, move, or drop something. Tell Cortex what feels right.',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
+                  else
                     OutlinedButton(
                       onPressed: () =>
                           onChat('I’d like to adjust today’s calendar. '),
                       child: const Text('Adjust today’s plan'),
                     ),
-                  ],
                 ],
               ),
               'routines': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  DailyRoutines(model: model),
                   AlarmList(model: model),
-                  sectionHead('Your routines'),
-                  if (model.records('routine').isEmpty)
-                    caption(
-                      'A few gentle defaults will be added at your first check-in. Change them through chat.',
-                    ),
-                  for (final r
-                      in model
-                          .records('routine')
-                          .where((r) => r.data['enabled'] != false))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            r.data['kind'] == 'movement'
-                                ? Icons.directions_walk
-                                : r.data['kind'] == 'rest'
-                                ? Icons.spa_outlined
-                                : Icons.repeat,
-                            size: 17,
-                            color: muted,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(r.data['title'] as String)),
-                          caption(
-                            r.data['medical'] == true
-                                ? routineWhen(r)
-                                : '${r.data['minutes']} min',
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 22),
                 ],
               ),
               'calendars': Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   sectionHead(
-                    'Calendar events',
+                    'Other calendar events',
                     trailing: IconButton(
                       tooltip: 'Choose calendars',
                       onPressed: () => openCalendars(context, model),
@@ -300,7 +159,9 @@ class TimeScreen extends StatelessWidget {
         m
             .records('event')
             .where(
-              (e) => (e.data['date']?.toString() ?? '').compareTo(day()) >= 0,
+              (e) =>
+                  (e.data['date']?.toString() ?? '').compareTo(day()) > 0 ||
+                  (e.data['date'] == day() && e.data['allDay'] == true),
             )
             .toList()
           ..sort(
@@ -345,109 +206,6 @@ class TimeScreen extends StatelessWidget {
         ),
     ];
   }
-
-  Widget blockRow(Map<String, dynamic> b) => Padding(
-    padding: const EdgeInsets.only(bottom: 13),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 64,
-          child: caption(planClock((b['start'] as num).toInt())),
-        ),
-        Container(
-          width: 3,
-          height: 38,
-          margin: const EdgeInsets.only(right: 12),
-          color: b['kind'] == 'rest' ? const Color(0xFFBECDAA) : line,
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                b['title'] as String,
-                style: TextStyle(
-                  decoration: b['done'] == true
-                      ? TextDecoration.lineThrough
-                      : null,
-                  color: b['done'] == true ? muted : ink,
-                ),
-              ),
-              caption(
-                '${(b['end'] as num) - (b['start'] as num)} min · ${b['kind']}',
-              ),
-            ],
-          ),
-        ),
-        if (b['done'] == true) const Icon(Icons.check, size: 17, color: muted),
-      ],
-    ),
-  );
-  Map<String, dynamic>? timerFor(Map<String, dynamic> block) {
-    final calendarKey = block['calendarId'] != null && block['eventId'] != null
-        ? 'google:${block['calendarId']}\n${block['eventId']}'
-        : null;
-    return model.taskFocus.tasks
-        .where(
-          (f) => calendarKey != null
-              ? f['calendarKey'] == calendarKey
-              : block['taskId'] != null && f['taskId'] == block['taskId'],
-        )
-        .firstOrNull;
-  }
-
-  Future<void> startBlock(
-    BuildContext context,
-    Map<String, dynamic> block,
-  ) => action(context, () async {
-    final timer = timerFor(block);
-    if (timer != null) {
-      if (timer['status'] != 'active') {
-        await model.taskFocus.act('begin', id: timer['id'] as String);
-      }
-      return;
-    }
-    onChat(
-      'I’m starting "${block['title']}" now. Use its existing calendar event; keep the planned times.',
-    );
-  });
-
-  Future<void> complete(
-    BuildContext context,
-    Entry plan,
-    List<Map<String, dynamic>> blocks,
-    Map<String, dynamic> target,
-  ) => action(context, () async {
-    final timer = timerFor(target);
-    final routineId = target['routineId'] ?? target['id'];
-    final task = model
-        .records('task')
-        .where((t) => t.id == target['taskId'])
-        .firstOrNull;
-    if (timer != null && timer['status'] != 'done') {
-      await model.taskFocus.act('complete', id: timer['id'] as String);
-    } else if (task != null) {
-      await model.save(
-        'task',
-        {...task.data, 'done': true},
-        id: task.id,
-        reload: false,
-      );
-    }
-    if (model.records('routine').any((r) => r.id == routineId)) {
-      await model.api.call('POST', '/v1/routines/complete', {
-        'routineId': routineId,
-        'date': plan.data['date'],
-        'done': true,
-      });
-    } else if (timer == null && task == null) {
-      onChat(
-        'I completed "${target['title']}". Mark its calendar task done and keep the planned times.',
-      );
-    }
-    await model.refresh();
-  });
 }
 
 class CheckIn extends StatefulWidget {

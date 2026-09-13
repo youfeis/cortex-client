@@ -14,7 +14,6 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
   private let defaults = UserDefaults.standard
   private let prefix = "cortex.focus."
   private var work: Task<Void, Never>?
-  private var liveAttempt: String?
   private var restoration: Task<Void, Never>?
   private var restoreGeneration = UUID()
   private var liveWatchers: [String: Task<Void, Never>] = [:]
@@ -130,7 +129,6 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
               continuation.resume(returning: true)
               return
             }
-            self.liveAttempt = nil
             try? await self.schedule()
             Self.changed?()
             if #available(iOS 16.2, *) {
@@ -182,7 +180,6 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
           _ = try await self.center.requestAuthorization(options: [.alert, .sound])
           try await self.schedule()
         case "focusRestore":
-          self.liveAttempt = nil
           try await self.schedule()
         case "focusApply":
           if let hours = args["quietHours"] as? [String: String] {
@@ -335,7 +332,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
       }.max()
       taskNotifications[id] = ["count": matching.count, "through": through.map(Self.iso) ?? ""]
     }
-    return [
+    let result: [String: Any] = [
       "taskNotifications": taskNotifications,
       "permission": state, "liveEnabled": enabled, "liveActive": live, "liveCount": liveCount,
       "liveActivityID": liveID, "scheduledBoards": scheduledBoards, "liveCoveredIDs": coveredIDs,
@@ -361,6 +358,23 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         ?? NSNull(),
       "openRequest": defaults.dictionary(forKey: "cortex.focus.openRequest") as Any? ?? NSNull(),
     ]
+    // Keep a bounded, local diagnostic snapshot. No messages, credentials or
+    // task titles: this distinguishes OS acceptance from a cached server ack.
+    var diagnostic: [String: Any] = [
+      "checkedAt": Self.iso(Date()), "appState": UIApplication.shared.applicationState.rawValue,
+      "permission": state, "liveEnabled": enabled, "liveActive": live,
+      "liveCount": liveCount, "liveActivityID": liveID, "scheduledBoards": scheduledBoards,
+      "liveTaskIDs": liveTaskIDs, "notificationCount": requests.count,
+      "availableTaskIDs": visible.compactMap { $0["id"] as? String },
+    ]
+    if let error = defaults.dictionary(forKey: "cortex.focus.lastLiveError") {
+      diagnostic["lastError"] = error
+    }
+    if let callback = defaults.dictionary(forKey: "cortex.focus.notificationCallback") {
+      diagnostic["notificationCallback"] = callback
+    }
+    defaults.set(diagnostic, forKey: "cortex.focus.diagnostic")
+    return result
   }
   private func clearNotifications() async {
     let ids = await center.pendingNotificationRequests().filter { $0.identifier.hasPrefix(prefix) }
@@ -499,7 +513,6 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     let activities = Activity<CortexTaskBoardAttributes>.activities
     guard !openTasks.isEmpty else {
       for a in activities { await a.end(nil, dismissalPolicy: .immediate) }
-      liveAttempt = nil
       defaults.set(0, forKey: "cortex.focus.page")
       defaults.set("none", forKey: "cortex.focus.liveState")
       return
@@ -507,6 +520,11 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     // Once the last available task ends, a future-only schedule must wait for
     // its activation time instead of inheriting the old visible card.
     let current = visible.isEmpty ? nil : activities.first { Self.ongoing($0.activityState) }
+    // Expired cards can remain on the Lock Screen and consume an OS slot.
+    // Retire those before trying to restore current unfinished work.
+    for old in activities where old.activityState == .ended || old.activityState == .dismissed {
+      await old.end(nil, dismissalPolicy: .immediate)
+    }
     var remaining = openTasks.filter {
       ["pending", "ready"].contains($0["status"] as? String ?? "") || isAvailable($0, at: now)
     }
@@ -610,6 +628,13 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
         defaults.set(at > now ? "scheduled" : "active", forKey: "cortex.focus.liveState")
       } catch {
         defaults.set("unavailable", forKey: "cortex.focus.liveState")
+        let failure = error as NSError
+        defaults.set([
+          "at": Self.iso(Date()), "domain": failure.domain, "code": failure.code,
+          "message": error.localizedDescription,
+          "appState": UIApplication.shared.applicationState.rawValue,
+          "scheduled": at > now,
+        ], forKey: "cortex.focus.lastLiveError")
       }
     }
     for old in activities where !keep.contains(old.id) {
@@ -728,28 +753,45 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     return true
   }
   nonisolated func userNotificationCenter(
-    _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-  ) async -> UNNotificationPresentationOptions {
-    if #available(iOS 14.0, *) { return [.banner, .list, .sound] }
-    return [.alert, .sound]
+    _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    Task { @MainActor in
+      if #available(iOS 14.0, *) { completionHandler([.banner, .list, .sound]) }
+      else { completionHandler([.alert, .sound]) }
+    }
   }
   nonisolated func userNotificationCenter(
-    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
-  ) async {
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
     let info = response.notification.request.content.userInfo
     let action = response.actionIdentifier
     let reason = (response as? UNTextInputNotificationResponse)?.userText ?? ""
-    await MainActor.run {
+    // The async delegate bridge can invoke UIKit's completion on a worker
+    // thread, triggering a state-restoration assertion after tapping a banner.
+    // Complete explicitly on the main actor, after the durable action finishes.
+    Task { @MainActor in
       self.enqueue {
-        if ["begin", "extend", "pause", "complete", "postpone"].contains(action) {
+        let isAction = ["begin", "extend", "pause", "complete", "postpone"].contains(action)
+        if isAction {
           try? await self.act([
             "id": info["focusId"] ?? "", "expectedRevision": info["revision"] ?? -1,
             "action": action, "minutes": 15, "reason": reason,
           ])
-          await self.syncInBackground()
         } else {
+          try? await self.schedule()
           Self.changed?()
         }
+        self.defaults.set([
+          "at": Self.iso(Date()), "action": action,
+          "completedOnMainThread": Thread.isMainThread,
+        ], forKey: "cortex.focus.notificationCallback")
+        // Finish after the local action is durable. A slow/offline server must
+        // not hold iOS's notification completion open; the outbox survives exit.
+        completionHandler()
+        _ = await self.status()
+        if isAction { await self.syncInBackground() }
       }
     }
   }

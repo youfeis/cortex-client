@@ -279,6 +279,15 @@ Settings > Task check-ins shows availability and has Restore task card.
 Apple can end a Live Activity after eight hours; a continuously visible card
 cannot be guaranteed while the app remains closed. Tasks remain stored.
 
+Notification delegate completions run explicitly on the main actor. Tapping a
+reminder saves the action locally before completing the callback; server sync
+follows without holding iOS's completion open. This avoids the UIKit background
+state-restoration crash caused by the async delegate's completion thread.
+Retained ended cards are retired before requesting a replacement. The local
+`cortex.focus.diagnostic` preference records actual ActivityKit availability,
+active/scheduled card IDs, the last request error, and notification completion
+thread; it excludes task titles, chat messages and credentials.
+
 Button actions save locally before syncing with the signed API. App Intents try
 to sync directly; offline/locked-device failures remain queued for the next open.
 Revision checks reject stale actions. The server forwards real starts, extensions
@@ -301,9 +310,15 @@ checks real notification delivery, one shared card, independent offline actions,
 stable task positions, started paused/postponed visibility, future-task filtering,
 foreground restoration and stale-action rejection. Synthetic tasks are removed.
 
+`integration_test/notification_test.dart` is a separate device UI regression test:
+run it with the same driver on a disposable simulator, allow notifications, wait
+for READY, send Cortex Home, expand its reminder, and tap Take a break. It checks
+that UIKit's background callback saves the pause without crashing, retains the
+card, and stops reminders. Bring Cortex back to finish the assertions/cleanup.
+
 ## Pets
 
-My space → Pets shows separate Cookie and Wanwan weight charts with 30-day, 90-day and all-history filters. Every same-day reading is retained, values use two decimal places in kg, and the axis leaves room for small changes. Use the chat links to record or correct a weight; pull down to refresh. The Pets page and My space entry use the existing database-backed remote layout contract with a bundled offline layout. Missing readings remain empty.
+My space → Pets shows separate Cookie and Wanwan weight charts with 30-day, 90-day and all-history filters. Every same-day reading is retained, values use three decimal places and show the selected reading’s notes in kg, and the axis leaves room for small changes. Use the chat links to record or correct a weight; pull down to refresh. The Pets page and My space entry use the existing database-backed remote layout contract with a bundled offline layout. Missing readings remain empty.
 
 ## Calendar-backed day planning
 

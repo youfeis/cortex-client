@@ -11,7 +11,7 @@ const glucoseColor = Color(0xFF686295);
 enum TrendMetric { weight, glucose, bp }
 
 class HealthPoint {
-  final String id, date, context;
+  final String id, date, context, note;
   final DateTime at;
   final DateTime? updated;
   final double value;
@@ -23,6 +23,7 @@ class HealthPoint {
     this.value, {
     this.second,
     this.context = '',
+    this.note = '',
     this.updated,
   });
 }
@@ -392,6 +393,11 @@ class _HealthTrendCardState extends State<HealthTrendCard> {
               '${point.date} · ${index == points.length - 1 ? 'Latest in this period' : 'Selected reading'}',
               style: const TextStyle(color: muted, fontSize: 12),
             ),
+            if (point.note.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: caption(point.note),
+              ),
             if (widget.metric == TrendMetric.bp)
               Padding(
                 padding: const EdgeInsets.only(top: 12),

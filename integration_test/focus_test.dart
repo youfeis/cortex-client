@@ -194,8 +194,7 @@ void main() {
           'Tired, after 4 pm please.',
         );
         await binding.takeScreenshot('task-board-verification');
-        // Future-ready tasks must be visible now, not counted as visible while
-        // ActivityKit has only scheduled a pending activity for their start time.
+        // A stale ready label must not expose a task hours before its start.
         final future = {
           ...a,
           'id': 'board-test-future-$base',
@@ -207,8 +206,9 @@ void main() {
               'focuses': [future],
             }) ??
             {};
-        expect(state['liveCount'], 1);
-        expect(state['liveState'], 'active');
+        expect(state['liveCount'], 0);
+        expect(state['liveState'], 'scheduled');
+        expect((state['scheduledBoards'] as List).length, 1);
         // All eight supported overlapping tasks remain reachable through local pages.
         final board = [
           for (var i = 0; i < 8; i++)
@@ -312,6 +312,45 @@ void main() {
         await page(5);
         expect(state['liveTaskIDs'], [busyDay[10]['id'], busyDay[11]['id']]);
         expect(state['liveCount'], 1);
+        // Preloading the day must not make future work visible or add pages.
+        final later = {
+          ...busyDay.last,
+          'id': 'calendar-later-$base',
+          'status': 'pending',
+          'activateAt': iso(now.add(const Duration(hours: 1))),
+          'scheduledStart': iso(now.add(const Duration(minutes: 90))),
+          'startedAt': '0001-01-01T00:00:00Z',
+          'expectedEnd': iso(now.add(const Duration(hours: 2))),
+        };
+        state =
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [busyDay.first, later],
+            }) ??
+            {};
+        expect(state['livePages'], 1);
+        expect(state['liveTaskIDs'], [busyDay.first['id']]);
+        expect(item(later['id'] as String)['status'], 'pending');
+        await page(99);
+        expect(state['liveTaskIDs'], [busyDay.first['id']]);
+        state =
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [
+                busyDay.first,
+                {
+                  ...later,
+                  'revision': base + 1,
+                  'activateAt': iso(
+                    DateTime.now().subtract(const Duration(seconds: 1)),
+                  ),
+                  'scheduledStart': iso(
+                    DateTime.now().add(const Duration(minutes: 30)),
+                  ),
+                },
+              ],
+            }) ??
+            {};
+        expect(state['liveTaskIDs'], [busyDay.first['id'], later['id']]);
+        expect(item(later['id'] as String)['status'], 'ready');
       } finally {
         state = await native.invokeMethod<Map>('focusStatus') ?? {};
         for (final request in List<Map>.from(state['pending'] as List)) {

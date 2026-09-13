@@ -121,13 +121,109 @@ void main() {
       );
       count = 0;
       api.focus['status'] = 'pending';
+      api.focus['scheduledStart'] = DateTime.now()
+          .add(const Duration(hours: 2))
+          .toUtc()
+          .toIso8601String();
       coverage = ['task-focus'];
       await focus.sync();
       expect(api.acks.last['status'], 'scheduled');
       expect(focus.liveActive, false);
-      expect(focus.visible, true);
+      expect(
+        focus.visible,
+        false,
+        reason: 'A queued card is not available work yet.',
+      );
     },
   );
+  test('Only due-soon work or work already started is visible', () {
+    final now = DateTime.utc(2026, 9, 13, 10);
+    Map<String, dynamic> planned(Duration untilStart) => {
+      'status': 'pending',
+      'scheduledStart': now.add(untilStart).toIso8601String(),
+      'activateAt': now
+          .add(untilStart - const Duration(minutes: 30))
+          .toIso8601String(),
+    };
+    expect(
+      focusTaskVisibleAt(planned(const Duration(minutes: 30, seconds: 1)), now),
+      false,
+    );
+    expect(focusTaskVisibleAt(planned(const Duration(minutes: 30)), now), true);
+    expect(focusTaskPhase(planned(const Duration(minutes: 20)), now), 'ready');
+    expect(
+      focusTaskVisibleAt({
+        ...planned(const Duration(hours: 2)),
+        'status': 'ready',
+      }, now),
+      false,
+    );
+    expect(
+      focusTaskVisibleAt({
+        'status': 'active',
+        'expectedEnd': now.subtract(const Duration(hours: 1)).toIso8601String(),
+      }, now),
+      true,
+    );
+    for (final status in ['paused', 'postponed']) {
+      expect(
+        focusTaskVisibleAt({
+          'status': status,
+          'startedAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+        }, now),
+        true,
+      );
+      expect(
+        focusTaskVisibleAt({
+          'status': status,
+          'startedAt': '0001-01-01T00:00:00Z',
+        }, now),
+        false,
+      );
+    }
+    for (final status in ['done', 'cancelled', 'pending']) {
+      expect(focusTaskVisibleAt({'status': status}, now), false);
+    }
+  });
+  testWidgets('Task cards hide the future queue and show due-soon controls', (
+    tester,
+  ) async {
+    final model = CortexModel();
+    final now = DateTime.now();
+    model.taskFocus.tasks = [
+      {
+        'id': 'later',
+        'title': 'Later task',
+        'status': 'pending',
+        'scheduledStart': now.add(const Duration(hours: 2)).toIso8601String(),
+      },
+      {
+        'id': 'soon',
+        'title': 'Soon task',
+        'status': 'pending',
+        'scheduledStart': now
+            .add(const Duration(minutes: 20))
+            .toIso8601String(),
+      },
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: FocusPanel(model: model)),
+      ),
+    );
+    expect(find.text('Soon task'), findsOneWidget);
+    expect(find.text('Later task'), findsNothing);
+    expect(find.text('Your current task'), findsOneWidget);
+    expect(find.text('I’ve started'), findsOneWidget);
+    expect(find.text('Start early'), findsNothing);
+    expect(
+      model.taskFocus.tasks,
+      hasLength(2),
+      reason: 'Keep future tasks for scheduling, not display.',
+    );
+    await tester.pumpWidget(const SizedBox());
+    model.dispose();
+  });
   test(
     'offline break stops local reminders and remains queued until server catches up',
     () async {

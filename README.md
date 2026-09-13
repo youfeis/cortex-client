@@ -241,8 +241,10 @@ Postpone button, Pause and +5/+10/+15 minutes. Titles open task details. With
 more than two tasks, 44-point arrow buttons show the next or previous pair
 without opening Cortex; the left arrow shows the page count. Paging is saved
 locally and never edits timers, revisions or the action history. Task positions remain stable when the
-server returns its latest-edited task first. Paused/postponed tasks remain on
-the card with Resume; only completed/cancelled tasks leave it.
+server returns its latest-edited task first. Both the in-app strip/details and
+Live Activity pages show tasks only from 30 minutes before their planned start,
+or after an explicit Start. Already-started paused/postponed tasks stay reachable
+with Resume; unstarted postponed work stays hidden until rescheduled.
 
 Selected timed Google events and scheduled day-plan to-do blocks automatically
 create durable task occurrences. Planned tasks use pending → ready (30 minutes
@@ -255,8 +257,8 @@ API, which activates without a running Flutter app. Pending cards are reported a
 scheduled, never as currently visible. Nearby tasks share one board; groups span
 at most eight hours, with three queued boards. Each card carries the displayed
 pair only; its arrows load other tasks from native storage to stay below the
-4 KB payload limit. Later pending tasks remain listed in the app and can receive
-ordinary reminders.
+4 KB payload limit. Later pending tasks stay in the scheduling cache and calendar,
+without appearing in the current-task list or adding Live Activity pages.
 iOS may accept fewer cards; per-task acknowledgement reports actual coverage.
 The first scheduled card's alert replaces the matching ordinary 30-minute alert.
 Opening Cortex refreshes the next 48 hours, replaces moved/deleted occurrences,
@@ -294,7 +296,7 @@ when there are no real open tasks. The same flow is available at
 Native verification (idle simulator only):
 `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
 checks real notification delivery, one shared card, independent offline actions,
-stable task positions, paused/postponed visibility, future-ready visibility,
+stable task positions, started paused/postponed visibility, future-task filtering,
 foreground restoration and stale-action rejection. Synthetic tasks are removed.
 
 ## Pets

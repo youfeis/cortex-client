@@ -1,6 +1,7 @@
 import 'nutrition.dart';
 import 'medical_routines.dart';
 import 'health_access.dart';
+import 'energy.dart';
 import '../../remote_ui/remote_layout.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -38,35 +39,11 @@ class FitnessScreen extends StatelessWidget {
           : 0.0;
       List<Entry> todayRecords(String kind) =>
           model.records(kind).where((e) => e.data['date'] == today).toList();
-      final meals = todayRecords('meal'),
-          activity = todayRecords('activity'),
-          bps = todayRecords('bp'),
-          stepRecords = todayRecords('steps');
-      final steps = stepRecords.isEmpty
-          ? null
-          : (stepRecords.first.data['count'] as num).round();
-      final intake = meals.fold<double>(
-        0,
-        (sum, e) => sum + (e.data['kcal'] as num).toDouble(),
-      );
-      final extra =
-          max(
-            0,
-            (steps ?? 0) - ((goal['stepBaseline'] as num?)?.toInt() ?? 3000),
-          ) *
-          ((goal['kcalPerExtraStep'] as num?)?.toDouble() ?? .045);
-      final workouts = activity
-          .where((e) => e.data['source'] != 'appleHealth')
-          .fold<double>(
-            0,
-            (sum, e) => sum + (e.data['kcal'] as num).toDouble(),
-          );
-      final base = (goal['tdee'] as num?)?.toDouble();
-      final tdee = base == null ? null : base + extra + workouts;
-      final budget = tdee == null
-          ? (goal['intake'] as num?)?.toDouble()
-          : tdee - ((goal['deficit'] as num?)?.toDouble() ?? 0);
-      final remaining = budget == null ? null : budget - intake;
+      final meals = todayRecords('meal'), bps = todayRecords('bp');
+      final energy = DailyEnergy.fromRecords(model.entries, date: today);
+      final steps = energy.steps, intake = energy.intake;
+      final tdee = energy.tdee, budget = energy.budget;
+      final remaining = energy.remaining;
       return DefaultTabController(
         length: 2,
         child: Scaffold(
@@ -82,7 +59,7 @@ class FitnessScreen extends StatelessWidget {
           body: TabBarView(
             children: [
               RefreshIndicator(
-                onRefresh: model.refresh,
+                onRefresh: model.refreshFitness,
                 child: RemoteLayout(
                   page: 'fitness',
                   slots: {
@@ -209,7 +186,7 @@ class FitnessScreen extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 7),
-                                  caption('kcal recorded'),
+                                  Expanded(child: caption('kcal recorded')),
                                 ],
                               ),
                               const SizedBox(height: 20),
@@ -236,6 +213,9 @@ class FitnessScreen extends StatelessWidget {
                                             ),
                                           ),
                                           Container(
+                                            key: const ValueKey(
+                                              'energy-intake-fill',
+                                            ),
                                             height: 10,
                                             width:
                                                 box.maxWidth *
@@ -247,6 +227,9 @@ class FitnessScreen extends StatelessWidget {
                                             ),
                                           ),
                                           Positioned(
+                                            key: const ValueKey(
+                                              'energy-budget-marker',
+                                            ),
                                             left:
                                                 box.maxWidth *
                                                 (budget / scale).clamp(0, 1),
@@ -258,6 +241,9 @@ class FitnessScreen extends StatelessWidget {
                                           ),
                                           if (tdee != null)
                                             Positioned(
+                                              key: const ValueKey(
+                                                'energy-tdee-marker',
+                                              ),
                                               left:
                                                   box.maxWidth *
                                                   (tdee / scale).clamp(0, 1),
@@ -419,10 +405,14 @@ class FitnessScreen extends StatelessWidget {
                                       ),
                                     ),
                                     caption(
-                                      activity.isEmpty
-                                          ? 'Activity will appear after you log or import it.'
-                                          : '${activity.length} activity records today',
+                                      steps == null
+                                          ? 'Steps refresh from Apple Health each time you open Cortex.'
+                                          : 'Walking adds ~${energy.stepsExtraKcal.round()} kcal to today’s estimate.',
                                     ),
+                                    if (energy.workoutKcal > 0)
+                                      caption(
+                                        'Logged workouts add ~${energy.workoutKcal.round()} kcal.',
+                                      ),
                                   ],
                                 ),
                               ),

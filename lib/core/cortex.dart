@@ -265,38 +265,53 @@ class CortexModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh() async {
-    if (refreshing) {
-      return;
-    }
+  Future<void>? _refreshWork;
+  bool _refreshAgain = false;
+
+  Future<void> refresh() {
+    if (_disposed) return Future.value();
+    // A request after a write must not reuse a snapshot started before it.
+    _refreshAgain = true;
+    return _refreshWork ??= _refreshSnapshots().whenComplete(
+      () => _refreshWork = null,
+    );
+  }
+
+  Future<void> _refreshSnapshots() async {
     refreshing = true;
     try {
-      final value = await api.call('GET', '/v1/snapshot?date=${day()}') as Map;
-      routineStates = Map<String, dynamic>.from(
-        value['routineStates'] as Map? ?? {},
-      );
-      await memoryNotices.receive(value['records'] as List);
-      entries = (value['records'] as List)
-          .map((e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)))
-          .toList();
-      if (value['fitnessRecords'] is List) {
-        entries.removeWhere(
-          (e) => ['weight', 'bp', 'glucose'].contains(e.kind),
+      do {
+        _refreshAgain = false;
+        final value =
+            await api.call('GET', '/v1/snapshot?date=${day()}') as Map;
+        if (_disposed) return;
+        if (_refreshAgain) continue;
+        routineStates = Map<String, dynamic>.from(
+          value['routineStates'] as Map? ?? {},
         );
-        entries.addAll(
-          (value['fitnessRecords'] as List).map(
-            (e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)),
-          ),
-        );
-      }
-      messages = (value['messages'] as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-      sessions = ((value['sessions'] ?? []) as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-      chat = Map<String, dynamic>.from(value['chat'] as Map);
-      online = true;
+        await memoryNotices.receive(value['records'] as List);
+        entries = (value['records'] as List)
+            .map((e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+        if (value['fitnessRecords'] is List) {
+          entries.removeWhere(
+            (e) => ['weight', 'bp', 'glucose'].contains(e.kind),
+          );
+          entries.addAll(
+            (value['fitnessRecords'] as List).map(
+              (e) => Entry.fromJson(Map<String, dynamic>.from(e as Map)),
+            ),
+          );
+        }
+        messages = (value['messages'] as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        sessions = ((value['sessions'] ?? []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        chat = Map<String, dynamic>.from(value['chat'] as Map);
+        online = true;
+      } while (_refreshAgain && !_disposed);
     } on ApiException catch (e) {
       online = false;
       if (e.status == 401) {
@@ -411,11 +426,10 @@ class CortexModel extends ChangeNotifier {
     if (active && paired) {
       unawaited(taskFocus.sync());
       unawaited(alarms.sync());
-      unawaited(refresh().catchError((_) {}));
+      unawaited(refreshFitness().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));
       unawaited(syncCalendars(refreshSources: true));
       unawaited(layouts.refresh(this));
-      unawaited(syncHealth());
       unawaited(readGoogleAccounts());
     }
   }
@@ -545,6 +559,14 @@ class CortexModel extends ChangeNotifier {
   bool healthSyncing = false, healthHasData = false;
   Timer? _healthDebounce;
   String? _healthFingerprint;
+  Future<void>? _healthWork;
+  bool _healthAgain = false, _healthRequestAccess = false;
+
+  Future<void> refreshFitness() async {
+    // Keep chat/server data responsive while Health reads in parallel. If
+    // Health uploads new readings, its refresh queues a snapshot after the write.
+    await Future.wait([refresh(), syncHealth()]);
+  }
 
   Future<String> importHealth() async {
     await syncHealth(requestAccess: true);
@@ -554,10 +576,33 @@ class CortexModel extends ChangeNotifier {
             : 'Access requested. Only the data you share can appear here.');
   }
 
-  Future<void> syncHealth({bool requestAccess = false}) async {
-    if (_disposed || !paired || healthSyncing) return;
+  Future<void> syncHealth({bool requestAccess = false}) {
+    if (_disposed || !paired) return Future.value();
+    // Reopening during an earlier read must trigger another read of the phone.
+    _healthAgain = true;
+    _healthRequestAccess |= requestAccess;
+    return _healthWork ??= _syncHealthReads().whenComplete(
+      () => _healthWork = null,
+    );
+  }
+
+  Future<void> _syncHealthReads() async {
     healthSyncing = true;
     notifyListeners();
+    try {
+      do {
+        _healthAgain = false;
+        final requestAccess = _healthRequestAccess;
+        _healthRequestAccess = false;
+        await _readAndSyncHealth(requestAccess);
+      } while (_healthAgain && !_disposed && paired);
+    } finally {
+      healthSyncing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _readAndSyncHealth(bool requestAccess) async {
     try {
       final value = Map<String, dynamic>.from(
         await native.invokeMethod('readHealth', {
@@ -565,6 +610,7 @@ class CortexModel extends ChangeNotifier {
             })
             as Map,
       );
+      if (_disposed || !paired) return;
       healthPermission = value['permission'] as String? ?? 'setupNeeded';
       final rows =
           (value['records'] as List? ?? [])
@@ -578,8 +624,10 @@ class CortexModel extends ChangeNotifier {
       final fingerprint = jsonEncode(rows);
       if (rows.isNotEmpty && fingerprint != _healthFingerprint) {
         await api.call('POST', '/v1/health/sync', {'records': rows});
-        _healthFingerprint = fingerprint;
         await refresh();
+        // Only acknowledge readings once they are also visible in the app.
+        // A failed snapshot must be retried even when Health hasn't changed.
+        _healthFingerprint = fingerprint;
       }
       if (healthPermission == 'requested' && value['partial'] != true) {
         healthSyncedAt = DateTime.now();
@@ -587,9 +635,6 @@ class CortexModel extends ChangeNotifier {
     } catch (_) {
       healthError =
           'Health sync will retry. Unlock your iPhone and check Health access.';
-    } finally {
-      healthSyncing = false;
-      notifyListeners();
     }
   }
 

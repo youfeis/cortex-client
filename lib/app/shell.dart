@@ -184,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onDestinationSelected: (value) {
         FocusManager.instance.primaryFocus?.unfocus();
         setState(() => tab = value);
+        if (value == 0) chatKey.currentState?.showLatest();
       },
       destinations: const [
         NavigationDestination(

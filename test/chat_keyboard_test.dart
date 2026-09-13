@@ -36,13 +36,8 @@ void main() {
       ),
     );
     final state = tester.state<ChatScreenState>(find.byType(ChatScreen));
-    // Begin at the latest message, as in the reported issue. Variable-height
-    // rows may refine the scroll extent over more than one layout pass.
-    for (var i = 0; i < 5; i++) {
-      state.scroll.jumpTo(state.scroll.position.maxScrollExtent);
-      await tester.pumpAndSettle();
-    }
-    expect(state.scroll.position.extentAfter, closeTo(0, 1));
+    await tester.pumpAndSettle();
+    expect(state.scroll.position.extentBefore, closeTo(0, 1));
     await tester.enterText(find.byType(TextField), 'Keep this unsent draft');
     for (final inset in [120.0, 240.0, 300.0]) {
       tester.view.viewInsets = FakeViewPadding(bottom: inset);
@@ -50,13 +45,13 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(state.scroll.position.extentAfter, closeTo(0, 1));
+    expect(state.scroll.position.extentBefore, closeTo(0, 1));
     expect(find.text('Hide keyboard'), findsOneWidget);
 
     // Normal reading of older messages is not overridden once the keyboard settles.
-    state.scroll.jumpTo(0);
+    state.scroll.jumpTo(800);
     await tester.pumpAndSettle();
-    expect(state.scroll.offset, 0);
+    expect(state.scroll.offset, 800);
     await tester.tap(find.text('Hide keyboard'));
     for (final inset in [200.0, 90.0, 0.0]) {
       tester.view.viewInsets = FakeViewPadding(bottom: inset);
@@ -64,7 +59,7 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(state.scroll.position.extentAfter, closeTo(0, 1));
+    expect(state.scroll.position.extentBefore, closeTo(0, 1));
     expect(state.scroll.position.outOfRange, isFalse);
     expect(state.draft.text, 'Keep this unsent draft');
     expect(find.text('Hide keyboard'), findsNothing);

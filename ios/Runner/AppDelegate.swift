@@ -46,7 +46,7 @@ import HealthKit
             DispatchQueue.main.async { result(FlutterError(code: "device_key", message: error.localizedDescription, details: nil)) }
           }
         }
-      case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge":
+      case "focusStatus", "focusPermission", "focusApply", "focusAction", "focusAcknowledge", "focusRestore", "focusPreview", "focusPreviewAcknowledge", "focusOpenAcknowledge":
         CortexFocus.shared.handle(call.method, call.arguments as? [String: Any] ?? [:], result)
       case "alarmStatus", "alarmPermission", "alarmApply":
         if #available(iOS 26.0, *) { CortexAlarms.handle(call.method, call.arguments as? [String: Any] ?? [:], result) }

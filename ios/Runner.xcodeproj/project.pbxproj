@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		036D34BCEF5C1885B3575B3D /* CortexFocusIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEABFAE14E3ABB19B2B6D21 /* CortexFocusIntent.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -15,6 +16,7 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		8089A24A8ADEDCF07D785F0D /* CortexFocusAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809168D9F781312BA9E018F7 /* CortexFocusAttributes.swift */; };
+		8E46C2919CD6CCB349F7037D /* CortexFocusIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEABFAE14E3ABB19B2B6D21 /* CortexFocusIntent.swift */; };
 		9321A2BEBB6E1C35D12155ED /* CortexFocusAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809168D9F781312BA9E018F7 /* CortexFocusAttributes.swift */; };
 		949D3DA33B1229B55F89C753 /* CortexFocusWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2E53EB16530C09CF120C010A /* CortexFocusWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -98,6 +100,7 @@
 		D284A4B17B928BB9FCE520CF /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		D5893420440FC016163FB818 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		D63B21F6FAEF1EE4E15FEA2C /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
+		DDEABFAE14E3ABB19B2B6D21 /* CortexFocusIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CortexFocusIntent.swift; sourceTree = "<group>"; };
 		E2F0E50787AE11B97851670B /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -228,6 +231,7 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				1C0FC56C3368F7DC3526DC46 /* CortexFocus.swift */,
 				809168D9F781312BA9E018F7 /* CortexFocusAttributes.swift */,
+				DDEABFAE14E3ABB19B2B6D21 /* CortexFocusIntent.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -473,6 +477,7 @@
 			files = (
 				A4270D52C397F65F7FC794D4 /* CortexFocusWidget.swift in Sources */,
 				8089A24A8ADEDCF07D785F0D /* CortexFocusAttributes.swift in Sources */,
+				036D34BCEF5C1885B3575B3D /* CortexFocusIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,6 +491,7 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				CB14A22FE40752D47236E5A2 /* CortexFocus.swift in Sources */,
 				9321A2BEBB6E1C35D12155ED /* CortexFocusAttributes.swift in Sources */,
+				8E46C2919CD6CCB349F7037D /* CortexFocusIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -830,6 +836,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CORTEX_WIDGET";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -859,6 +866,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CORTEX_WIDGET";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -888,6 +896,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CORTEX_WIDGET";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;

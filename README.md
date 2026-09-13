@@ -245,3 +245,24 @@ Native verification (idle simulator only):
 `flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
 checks actual notification delivery, Live Activity creation, idempotent schedule,
 offline pause/complete, and stale-action rejection; its synthetic task is removed.
+
+## Shared task card
+
+Overlapping tasks share one native Live Activity. Each task has its own countdown,
+revision and action outbox. Select a task row before using I’ve started, Completed,
++5/+10/+15 minutes, or Break. Postpone opens a reason sheet; expanded reminder
+notifications also accept a typed/dictated reason. Reopening Cortex restores the
+card once without resetting deadlines or repeatedly undoing swipe dismissal.
+
+Button actions save locally before syncing with the signed API. App Intents try
+to sync directly; offline/locked-device failures remain queued for the next open.
+The server forwards real starts, extensions and postponements to the main chat
+when idle. Preview timers are explicitly excluded from planning and statistics.
+Settings > Task check-ins > Preview overlapping task card provides two test timers
+when there are no real open tasks. The same flow is available at
+`cortex://focus?action=preview` for device verification.
+
+Notifications fire at the expected finish, after ten minutes, then every fifteen
+minutes, subject to the latest plan’s waking hours. Up to forty reminders total
+are pre-scheduled across tasks and refreshed on open. The eight-hour iOS Live
+Activity limit and system notification/Focus permissions still apply.

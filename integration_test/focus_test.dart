@@ -7,12 +7,12 @@ import 'package:cortex/core/cortex.dart';
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'Task Live Activity, reminder delivery, offline actions, and stale actions',
+    'One card, overlapping timers, offline actions and foreground restoration',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: Center(child: Text('Cortex task check-in verification')),
+            body: Center(child: Text('Cortex task board verification')),
           ),
         ),
       );
@@ -20,49 +20,71 @@ void main() {
       expect(
         (state['pending'] as List).isEmpty,
         isTrue,
-        reason: 'Use an idle simulator with no pending owner actions.',
+        reason: 'Use an idle simulator.',
       );
-      expect((state['focus'] as Map?)?['status'], isNot('active'));
-      final previous = state['focus'];
+      final previous = state['focuses'] ?? [];
       state = await native.invokeMethod<Map>('focusPermission') ?? {};
-      expect(
-        state['permission'],
-        'authorized',
-        reason: 'Allow notifications in the simulator prompt.',
-      );
+      expect(state['permission'], 'authorized');
       final base = DateTime.now().millisecondsSinceEpoch;
-      final id = 'focus-verification-$base';
       String iso(DateTime d) => d.toUtc().toIso8601String();
-      final f = {
-        'id': id,
+      final now = DateTime.now();
+      final a = <String, dynamic>{
+        'id': 'board-test-a-$base',
         'revision': base,
-        'title': 'One small step · test',
-        'status': 'active',
-        'startedAt': iso(DateTime.now().subtract(const Duration(minutes: 25))),
-        'expectedEnd': iso(
-          DateTime.now().subtract(const Duration(minutes: 14, seconds: 48)),
-        ),
+        'title': 'Preview · Read for 25 minutes',
+        'status': 'ready',
+        'preview': true,
+        'durationMinutes': 25,
+        'scheduledStart': iso(now),
+        'startedAt': iso(now),
+        'expectedEnd': iso(now.add(const Duration(minutes: 25))),
         'intervalMinutes': 15,
       };
+      final b = <String, dynamic>{
+        'id': 'board-test-b-$base',
+        'revision': base,
+        'title': 'Preview · Laundry timer',
+        'status': 'active',
+        'preview': true,
+        'durationMinutes': 40,
+        'startedAt': iso(now.subtract(const Duration(minutes: 10))),
+        'expectedEnd': iso(now.add(const Duration(seconds: 12))),
+        'intervalMinutes': 15,
+      };
+      Map item(String id) => (state['focuses'] as List).cast<Map>().firstWhere(
+        (f) => f['id'] == id,
+      );
+      Future<void> act(
+        String id,
+        String action, {
+        int minutes = 15,
+        String? reason,
+      }) async {
+        state =
+            await native.invokeMethod<Map>('focusAction', {
+              'id': id,
+              'expectedRevision': item(id)['revision'],
+              'action': action,
+              'minutes': minutes,
+              'reason': ?reason,
+            }) ??
+            {};
+      }
+
       try {
         state =
-            await native.invokeMethod<Map>('focusApply', {'focus': f}) ?? {};
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [a, b],
+            }) ??
+            {};
         for (var i = 0; i < 5 && state['liveActive'] != true; i++) {
           await tester.runAsync(
             () => Future<void>.delayed(const Duration(seconds: 1)),
           );
-          state =
-              await native.invokeMethod<Map>('focusApply', {'focus': f}) ?? {};
+          state = await native.invokeMethod<Map>('focusRestore') ?? {};
         }
-        expect(state['liveActive'], isTrue, reason: state.toString());
-        expect(state['notificationCount'], 32);
-        state =
-            await native.invokeMethod<Map>('focusApply', {'focus': f}) ?? {};
-        expect(
-          state['notificationCount'],
-          32,
-          reason: 'Retries must not duplicate alerts.',
-        );
+        expect(state['liveCount'], 1);
+        expect(state['notificationCount'], 40);
         for (var i = 0; i < 25; i++) {
           await tester.runAsync(
             () => Future<void>.delayed(const Duration(seconds: 1)),
@@ -71,61 +93,63 @@ void main() {
           if ((state['deliveredCount'] as int) > 0) break;
         }
         expect(state['deliveredCount'], greaterThan(0));
-        await binding.takeScreenshot('task-checkin-notification');
+        await act(a['id'], 'begin');
+        expect(item(a['id'])['status'], 'active');
+        expect(item(b['id'])['revision'], base);
+        final before = DateTime.parse(item(a['id'])['expectedEnd']);
+        await act(a['id'], 'extend', minutes: 5);
+        expect(
+          DateTime.parse(item(a['id'])['expectedEnd']).difference(before),
+          const Duration(minutes: 5),
+        );
+        expect(item(b['id'])['expectedEnd'], b['expectedEnd']);
+        // Reopening restores one card, without resetting either timer or duplicating alerts.
+        final endA = item(a['id'])['expectedEnd'];
+        state = await native.invokeMethod<Map>('focusRestore') ?? {};
+        expect(state['liveCount'], 1);
+        expect(item(a['id'])['expectedEnd'], endA);
+        await act(a['id'], 'postpone', reason: 'Tired, after 4 pm please.');
+        expect(item(a['id'])['status'], 'postponed');
+        expect(item(b['id'])['status'], 'active');
+        expect((state['taskNotifications'] as Map)[a['id']]['count'], 0);
+        expect(state['liveCount'], 1);
         state =
-            await native.invokeMethod<Map>('focusAction', {
-              'id': id,
-              'expectedRevision': base,
-              'action': 'pause',
+            await native.invokeMethod<Map>('focusApply', {
+              'focuses': [a, b],
             }) ??
             {};
-        expect(state['notificationCount'], 0);
-        expect(state['liveActive'], isFalse);
-        expect((state['pending'] as List), hasLength(1));
-        state =
-            await native.invokeMethod<Map>('focusApply', {'focus': f}) ?? {};
-        expect((state['focus'] as Map)['status'], 'paused');
-        expect(state['notificationCount'], 0);
-        final request = (state['pending'] as List).first as Map;
-        await native.invokeMethod<Map>('focusAcknowledge', {
-          'requestId': request['requestId'],
-        });
-        state =
-            await native.invokeMethod<Map>('focusAction', {
-              'id': id,
-              'expectedRevision': base + 1,
-              'action': 'extend',
-            }) ??
-            {};
-        expect(state['notificationCount'], 32);
-        expect(state['liveActive'], isTrue);
+        expect(
+          item(a['id'])['status'],
+          'postponed',
+          reason: 'Offline action survives stale server response.',
+        );
         await expectLater(
           native.invokeMethod<Map>('focusAction', {
-            'id': id,
+            'id': a['id'],
             'expectedRevision': base,
             'action': 'complete',
           }),
           throwsA(isA<PlatformException>()),
         );
-        state =
-            await native.invokeMethod<Map>('focusAction', {
-              'id': id,
-              'expectedRevision': base + 2,
-              'action': 'complete',
-            }) ??
-            {};
+        await act(b['id'], 'complete');
+        expect(state['liveCount'], 0);
         expect(state['notificationCount'], 0);
-        expect(state['liveActive'], isFalse);
-        expect((state['focus'] as Map)['status'], 'done');
+        expect(
+          (state['pending'] as List)
+              .where((e) => (e as Map)['action'] == 'postpone')
+              .single['reason'],
+          'Tired, after 4 pm please.',
+        );
+        await binding.takeScreenshot('task-board-verification');
       } finally {
         state = await native.invokeMethod<Map>('focusStatus') ?? {};
-        for (final request in state['pending'] as List) {
+        for (final request in List<Map>.from(state['pending'] as List)) {
           await native.invokeMethod<Map>('focusAcknowledge', {
-            'requestId': (request as Map)['requestId'],
+            'requestId': request['requestId'],
             'discarded': true,
           });
         }
-        await native.invokeMethod<Map>('focusApply', {'focus': previous});
+        await native.invokeMethod<Map>('focusApply', {'focuses': previous});
       }
     },
   );

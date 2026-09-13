@@ -474,11 +474,15 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
   // is locked/offline, its durable outbox is retried on the next foreground sync.
   private func syncInBackground() async {
     do {
+      var discardedTasks = Set<String>()
       for input in pending.prefix(8) {
+        let taskID = input["id"] as? String ?? ""
+        if discardedTasks.contains(taskID) { continue }
         do { _ = try await request("POST", "/v1/focus/actions", input) } catch let error as NSError
           where error.domain == "CortexHTTP" && [400, 409].contains(error.code)
         {
           let id = input["id"] as? String
+          discardedTasks.insert(taskID)
           pending = pending.filter { $0["id"] as? String != id }
           tasks = tasks.filter { $0["id"] as? String != id }
           continue

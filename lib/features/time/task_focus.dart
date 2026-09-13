@@ -30,7 +30,11 @@ Future<void> postponeFocus(
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          const Text('What changed? When would work better?'),
+          Text(
+            item['preview'] == true
+                ? 'Try a reason or new time. This preview won’t change your real plan.'
+                : 'What changed? When would work better?',
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: controller,
@@ -202,7 +206,9 @@ class _FocusPanelState extends State<FocusPanel> {
         : ready
         ? 'Ready when you are. Tap “I’ve started”.'
         : status == 'postponed'
-        ? 'Postponed · Cortex will review your reason in chat.'
+        ? (item['preview'] == true
+              ? 'Preview postponed · your real plan is unchanged.'
+              : 'Postponed · Cortex will review your reason in chat.')
         : 'Paused. A break is okay.';
     Future<void> respond(String command, [int minutes = 15]) async {
       await focus.act(command, id: item['id'] as String, minutes: minutes);

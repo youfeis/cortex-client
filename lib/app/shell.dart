@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final chatKey = GlobalKey<ChatScreenState>();
   bool _showingMemory = false;
   bool _showingTask = false;
+  String? _compressionNotice;
   @override
   void initState() {
     super.initState();
@@ -35,6 +36,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _memoryChanged() {
+    final job = widget.model.chat['compaction'];
+    if (mounted &&
+        widget.model.foreground &&
+        job is Map &&
+        ['completed', 'failed'].contains(job['status'])) {
+      final key = '${job['id']}:${job['status']}';
+      if (_compressionNotice != key) {
+        _compressionNotice = key;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                job['status'] == 'completed'
+                    ? 'Context compressed. Handoff saved; chat history kept.'
+                    : 'Compression did not finish. Your conversation is kept.',
+              ),
+            ),
+          );
+        });
+      }
+    }
     final request = widget.model.taskFocus.openRequest;
     if (mounted &&
         !_showingTask &&

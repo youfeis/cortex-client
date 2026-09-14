@@ -191,7 +191,9 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> send() async {
-    if (sending || (draft.text.trim().isEmpty && images.isEmpty)) {
+    if (sending ||
+        widget.model.compressing ||
+        (draft.text.trim().isEmpty && images.isEmpty)) {
       return;
     }
     final text = draft.text.trim(),
@@ -500,14 +502,16 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     icon: const Icon(Icons.add_photo_alternate_outlined),
                   ),
                   const Spacer(),
-                  if (m.busy)
+                  if (m.busy && !m.compressing)
                     IconButton(
                       tooltip: 'Stop reply',
                       onPressed: () => action(context, m.stop),
                       icon: const Icon(Icons.stop_rounded),
                     ),
                   FilledButton(
-                    onPressed: !m.loggedIn || sending ? null : send,
+                    onPressed: !m.loggedIn || sending || m.compressing
+                        ? null
+                        : send,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(44, 42),
                       padding: const EdgeInsets.symmetric(horizontal: 13),

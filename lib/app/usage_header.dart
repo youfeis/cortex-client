@@ -4,11 +4,13 @@ import '../core/cortex.dart';
 import '../main.dart';
 import '../core/quota.dart';
 import 'ui.dart';
+import 'context_compression.dart';
 
 String chatStatus(CortexModel model) {
   if (!model.online) return 'Reconnecting';
   if (!model.loggedIn) return 'Login needed';
   return switch (model.chat['status']) {
+    'compressing' => 'Compressing…',
     'thinking' => 'Thinking',
     'working' => 'Working',
     'replying' => 'Replying',
@@ -30,6 +32,7 @@ class AppUsageHeader extends StatefulWidget {
 }
 
 class _AppUsageHeaderState extends State<AppUsageHeader> {
+  String? _thread;
   Map<String, dynamic>? _shownContext, _latestContext;
   late final Timer _contextTimer;
   CortexModel get model => widget.model;
@@ -50,6 +53,11 @@ class _AppUsageHeaderState extends State<AppUsageHeader> {
   }
 
   void _receiveContext() {
+    final thread = model.chat['threadId'] as String?;
+    if (thread != null && thread != _thread) {
+      _thread = thread;
+      setState(() => _shownContext = _latestContext = null);
+    }
     final incoming = model.chat['context'];
     // Heartbeats can omit usage. Keep the last valid sample on screen.
     if (contextRemaining(incoming) == null) return;
@@ -98,16 +106,25 @@ class _AppUsageHeaderState extends State<AppUsageHeader> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _UsageMeter(
-                meterKey: const Key('main-context-progress'),
-                label: 'Main context',
-                valueLabel: contextLeft == null
-                    ? '—'
-                    : '~${(contextLeft * 100).round()}% left',
-                fraction: contextLeft,
-                subtitle: '● ${chatStatus(model)}',
-                description:
-                    '${contextLabel(_shownContext)}. ${chatStatus(model)}.',
+              child: InkWell(
+                key: const Key('compress-context-header'),
+                onTap: () => showContextCompression(context, model),
+                child: _UsageMeter(
+                  meterKey: const Key('main-context-progress'),
+                  label: 'Main context',
+                  compress: true,
+                  valueLabel: contextLeft == null
+                      ? model.chat['compaction'] is Map &&
+                                model.chat['compaction']['status'] ==
+                                    'completed'
+                            ? 'Fresh'
+                            : '—'
+                      : '~${(contextLeft * 100).round()}% left',
+                  fraction: contextLeft,
+                  subtitle: '● ${chatStatus(model)}',
+                  description:
+                      '${contextLabel(_shownContext)}. ${chatStatus(model)}. Tap to compress context.',
+                ),
               ),
             ),
             const SizedBox(width: 20),
@@ -136,10 +153,12 @@ class _AppUsageHeaderState extends State<AppUsageHeader> {
 }
 
 class _UsageMeter extends StatelessWidget {
+  final bool compress;
   final Key meterKey;
   final String label, valueLabel, subtitle, description;
   final double? fraction;
   const _UsageMeter({
+    this.compress = false,
     required this.meterKey,
     required this.label,
     required this.valueLabel,
@@ -188,11 +207,31 @@ class _UsageMeter extends StatelessWidget {
             color: ink,
           ),
           const SizedBox(height: 5),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10, height: 1.3, color: muted),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    height: 1.3,
+                    color: muted,
+                  ),
+                ),
+              ),
+              if (compress)
+                const Text(
+                  'Compress',
+                  style: TextStyle(
+                    fontSize: 10,
+                    height: 1.3,
+                    color: ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

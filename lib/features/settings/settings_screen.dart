@@ -10,6 +10,7 @@ import '../../core/quota.dart';
 import '../time/calendars.dart';
 
 import 'codex_login.dart';
+import '../../app/context_compression.dart';
 
 class SettingsScreen extends StatelessWidget {
   final CortexModel model;
@@ -141,6 +142,11 @@ class SettingsScreen extends StatelessWidget {
           sectionHead('Account usage'),
           Panel(child: QuotaPanel(model: model)),
           sectionHead('Sessions'),
+          OutlinedButton.icon(
+            onPressed: () => showContextCompression(context, model),
+            icon: const Icon(Icons.compress_rounded),
+            label: const Text('Compress context'),
+          ),
           caption(
             'The main conversation always answers you. Focused helpers work in the background.',
           ),
@@ -169,7 +175,9 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 5),
                     if (session['kind'] != 'main') ...[
                       caption(
-                        '${session['kind']} helper · ${session['status'] ?? 'ready'}',
+                        session['kind'] == 'archived_main'
+                            ? 'Archived · details kept in MongoDB'
+                            : '${session['kind']} helper · ${session['status'] ?? 'ready'}',
                       ),
                       if ((session['summary'] as String? ?? '').isNotEmpty)
                         Text(
@@ -189,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           const SizedBox(height: 14),
           caption(
-            'Context can be compressed as a conversation grows. Saved memory stays in MongoDB. Only changed facts are sent again; helpers keep detailed task history. Context usage is separate from your account usage limit.',
+            'Compress saves a short handoff in MongoDB and opens a fresh main session. Chat history stays visible. Older details are retrieved when needed. Context usage is separate from your account usage limit.',
           ),
           const SizedBox(height: 28),
         ],

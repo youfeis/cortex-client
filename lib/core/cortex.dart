@@ -218,9 +218,61 @@ class CortexModel extends ChangeNotifier {
   List<Entry> records(String kind) =>
       entries.where((e) => e.kind == kind).toList();
   bool get busy =>
+      compressing ||
       (chat['turnId'] as String? ?? '').isNotEmpty ||
       ['thinking', 'working', 'replying', 'steering'].contains(chat['status']);
   bool get loggedIn => account?['account'] != null;
+
+  bool compressionSubmitting = false;
+  String? _compressionRequest, _compressionSource;
+  bool get compressing => chat['status'] == 'compressing';
+
+  Future<void> compressContext() async {
+    if (compressionSubmitting || busy) return;
+    compressionSubmitting = true;
+    notifyListeners();
+    try {
+      final source = chat['threadId'] as String?;
+      if (source == null || source.isEmpty) {
+        throw ApiException(409, 'Refresh the conversation before compressing.');
+      }
+      if (_compressionSource != source) {
+        _compressionRequest = null;
+        _compressionSource = source;
+      }
+      final previous = chat['compaction'];
+      if (previous is Map &&
+          previous['id'] == _compressionRequest &&
+          ['completed', 'failed'].contains(previous['status'])) {
+        _compressionRequest = null;
+      }
+      // Preserve the key on network failure so Retry cannot rotate twice.
+      _compressionRequest ??= newId();
+      final job = Map<String, dynamic>.from(
+        await api.call('POST', '/v1/chat/compact', {
+              'requestId': _compressionRequest,
+              'expectedSessionId': source,
+            })
+            as Map,
+      );
+      if (job['status'] == 'failed' || job['status'] == 'completed') {
+        _compressionRequest = null;
+      }
+      chat = {
+        ...chat,
+        'compaction': job,
+        'status': ['completed', 'failed'].contains(job['status'])
+            ? 'ready'
+            : 'compressing',
+      };
+      notifyListeners();
+      await refresh();
+    } finally {
+      compressionSubmitting = false;
+      notifyListeners();
+    }
+  }
+
   String? get ownerAvatarId {
     for (final entry in records('memory')) {
       if (entry.id == 'memory-owner-avatar') {

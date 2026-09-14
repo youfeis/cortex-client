@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cortex/core/cortex.dart';
 import 'package:cortex/app/shell.dart';
 import 'package:cortex/app/usage_header.dart';
+import 'package:cortex/core/compression_notices.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CompressionApi extends CortexApi {
   final requests = <Map<String, dynamic>>[];
@@ -50,6 +52,71 @@ CortexModel modelFor(CompressionApi api) => CortexModel(api: api)
   };
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'Completion notice survives app restart and ignores late progress',
+    () async {
+      const job = {'id': 'compression-one', 'status': 'summarizing'};
+      final first = CompressionNotices();
+      expect(await first.observe(job, initial: true), false);
+      // The job finishes while the app is closed: announce it once on reopening.
+      final second = CompressionNotices();
+      final done = {...job, 'status': 'completed'};
+      expect(await second.observe(done, initial: true), true);
+      expect(await second.observe(done), false);
+      expect(await second.observe(job), false);
+      expect(await CompressionNotices().observe(done, initial: true), false);
+      expect(
+        (await SharedPreferences.getInstance()).getString(
+          CompressionNotices.pendingKey,
+        ),
+        isNull,
+      );
+      // A genuinely new completion is still announced.
+      expect(
+        await second.observe({'id': 'compression-two', 'status': 'completed'}),
+        true,
+      );
+    },
+  );
+
+  test(
+    'Repeated snapshots produce one notification even when concurrent',
+    () async {
+      final notices = CompressionNotices();
+      const done = {'id': 'new-job', 'status': 'failed'};
+      expect(
+        await Future.wait([notices.observe(done), notices.observe(done)]),
+        [true, false],
+      );
+      expect(await CompressionNotices().observe(done, initial: true), false);
+    },
+  );
+
+  testWidgets('Reopening with an old result stays quiet and never compresses', (
+    tester,
+  ) async {
+    final api = CompressionApi();
+    for (var restart = 0; restart < 2; restart++) {
+      final model = modelFor(api)
+        ..chat = {
+          'status': 'ready',
+          'threadId': 'fresh',
+          'compaction': {'id': 'old-job', 'status': 'completed'},
+        };
+      await tester.pumpWidget(MaterialApp(home: HomeScreen(model: model)));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      model.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+      expect(api.requests, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      model.dispose();
+    }
+  });
+
   testWidgets('Header opens real compression and keeps history and draft', (
     tester,
   ) async {

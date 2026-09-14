@@ -1,6 +1,7 @@
 import '../features/time/task_focus.dart';
 import 'package:flutter/material.dart';
 import '../core/cortex.dart';
+import '../core/compression_notices.dart';
 import '../main.dart';
 import 'usage_header.dart';
 import 'avatars.dart';
@@ -21,10 +22,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final chatKey = GlobalKey<ChatScreenState>();
   bool _showingMemory = false;
   bool _showingTask = false;
-  String? _compressionNotice;
+  final _compressionNotices = CompressionNotices();
+  String? _lastCompressionState;
   @override
   void initState() {
     super.initState();
+    _compressionChanged(initial: true);
     widget.model.addListener(_memoryChanged);
     _memoryChanged();
   }
@@ -35,17 +38,26 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _memoryChanged() {
+  void _compressionChanged({bool initial = false}) {
     final job = widget.model.chat['compaction'];
-    if (mounted &&
-        widget.model.foreground &&
-        job is Map &&
-        ['completed', 'failed'].contains(job['status'])) {
+    if (mounted && widget.model.foreground && job is Map) {
       final key = '${job['id']}:${job['status']}';
-      if (_compressionNotice != key) {
-        _compressionNotice = key;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+      if (_lastCompressionState != key) {
+        _lastCompressionState = key;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted || !widget.model.foreground) {
+            _lastCompressionState = null;
+            return;
+          }
+          bool show;
+          try {
+            show = await _compressionNotices.observe(job, initial: initial);
+          } catch (_) {
+            // A notice-storage failure must not break chat or claim completion.
+            _lastCompressionState = null;
+            return;
+          }
+          if (!show || !mounted || !widget.model.foreground) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -58,6 +70,10 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  void _memoryChanged() {
+    _compressionChanged();
     final request = widget.model.taskFocus.openRequest;
     if (mounted &&
         !_showingTask &&

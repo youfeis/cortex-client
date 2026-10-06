@@ -430,12 +430,18 @@ class FitnessScreen extends StatelessWidget {
                         OutlinedButton.icon(
                           onPressed: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  TimeScreen(model: model, onChat: onChat),
+                              builder: (routineContext) => TimeScreen(
+                                model: model,
+                                initialRoutines: true,
+                                onChat: (prompt, {photo = false}) {
+                                  Navigator.pop(routineContext);
+                                  onChat(prompt, photo: photo);
+                                },
+                              ),
                             ),
                           ),
                           icon: const Icon(Icons.checklist),
-                          label: const Text('Daily routines · Time management'),
+                          label: const Text('Repeating routines'),
                         ),
                         caption(
                           'Health, movement and everyday routines share one checklist. Matching records update it automatically.',

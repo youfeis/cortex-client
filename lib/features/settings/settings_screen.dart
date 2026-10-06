@@ -1,4 +1,3 @@
-import '../time/task_focus.dart';
 import '../time/alarms.dart';
 import 'google_accounts.dart';
 import '../fitness/health_access.dart';
@@ -69,7 +68,6 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          FocusSettings(model: model),
           sectionHead('Codex account'),
           Panel(
             child: Column(

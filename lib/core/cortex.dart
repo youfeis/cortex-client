@@ -429,9 +429,6 @@ class CortexModel extends ChangeNotifier {
 
   void startServices() {
     native.setMethodCallHandler((call) async {
-      if (call.method == 'focusChanged') {
-        unawaited(taskFocus.sync(afterAction: true));
-      }
       if (call.method == 'alarmsChanged') {
         unawaited(alarms.sync());
       }
@@ -445,14 +442,6 @@ class CortexModel extends ChangeNotifier {
     });
     _alarmTimer?.cancel();
     _alarmTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (foreground &&
-          paired &&
-          (busy ||
-              taskFocus.checked == null ||
-              DateTime.now().difference(taskFocus.checked!) >
-                  const Duration(seconds: 30))) {
-        unawaited(taskFocus.sync());
-      }
       if (busy ||
           alarms.checked == null ||
           DateTime.now().difference(alarms.checked!) >
@@ -461,7 +450,6 @@ class CortexModel extends ChangeNotifier {
       }
     });
     unawaited(alarms.sync());
-    unawaited(taskFocus.sync());
     _servicesTimer?.cancel();
     _servicesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (foreground && paired) {
@@ -481,7 +469,6 @@ class CortexModel extends ChangeNotifier {
   void setForeground(bool active) {
     foreground = active;
     if (active && paired) {
-      unawaited(taskFocus.sync());
       unawaited(alarms.sync());
       unawaited(refreshFitness().catchError((_) {}));
       unawaited(readAccount().catchError((_) {}));

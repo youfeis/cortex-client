@@ -105,7 +105,6 @@ class _DailyRoutinesState extends State<DailyRoutines> {
         'date': day(),
         'done': done,
       });
-      await model.taskFocus.sync();
       await model.refresh();
     });
     if (mounted) setState(() => pending.remove(routine.id));
@@ -119,7 +118,6 @@ class _DailyRoutinesState extends State<DailyRoutines> {
             .where((r) => r.data['enabled'] != false)
             .toList()
           ..sort((a, b) => routineWhen(a).compareTo(routineWhen(b)));
-    if (rows.isEmpty) return const SizedBox.shrink();
     Map state(Entry r) {
       final value = model.routineStates[r.id];
       return value is Map && value['date'] == day() ? value : {};
@@ -170,7 +168,7 @@ class _DailyRoutinesState extends State<DailyRoutines> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         sectionHead(
-          'Daily routines',
+          'Repeating routines',
           trailing: Text(
             '${today.where((r) => state(r)['done'] == true).length}/${today.length} today',
             style: const TextStyle(fontSize: 12, color: muted),
@@ -179,11 +177,17 @@ class _DailyRoutinesState extends State<DailyRoutines> {
         Panel(
           child: Column(
             children: [
+              if (rows.isEmpty)
+                const Text(
+                  'No repeating routines yet. Tell Cortex what repeats and how often.',
+                ),
+              if (rows.isNotEmpty && today.isEmpty)
+                const Text('No routines due today.'),
               for (final r in today) row(r),
               if (upcoming.isNotEmpty)
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
-                  title: const Text('Other days'),
+                  title: const Text('Upcoming routines'),
                   children: [for (final r in upcoming) row(r)],
                 ),
             ],

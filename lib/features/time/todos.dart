@@ -46,10 +46,30 @@ bool todoCompletedToday(Entry task, DateTime now) {
       day(at.toLocal()) == day(now);
 }
 
-class TodoList extends StatelessWidget {
+class TodoList extends StatefulWidget {
   final CortexModel model;
   final OpenChat onChat;
   const TodoList({super.key, required this.model, required this.onChat});
+  @override
+  State<TodoList> createState() => _TodoListState();
+}
+
+class _TodoListState extends State<TodoList> {
+  final pendingWrites = <String>{};
+  CortexModel get model => widget.model;
+  OpenChat get onChat => widget.onChat;
+
+  Future<void> toggle(Entry task, bool done) async {
+    setState(() => pendingWrites.add(task.id));
+    await action(context, () async {
+      await model.api.call('POST', '/v1/tasks/${task.id}/complete', {
+        'done': done,
+      });
+      await model.refresh();
+    });
+    if (mounted) setState(() => pendingWrites.remove(task.id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final tasks = model.records('task').toList()
@@ -75,15 +95,13 @@ class TodoList extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2, right: 10),
-              child: Icon(
-                task.data['done'] == true
-                    ? Icons.check_circle_outline
-                    : Icons.radio_button_unchecked,
-                size: 19,
-                color: muted,
-              ),
+            Checkbox(
+              key: ValueKey('todo-check-${task.id}'),
+              value: task.data['done'] == true,
+              onChanged: model.online && !pendingWrites.contains(task.id)
+                  ? (value) => toggle(task, value ?? false)
+                  : null,
+              semanticLabel: task.data['title']?.toString() ?? 'To-do',
             ),
             Expanded(
               child: Column(
@@ -107,18 +125,14 @@ class TodoList extends StatelessWidget {
                 ],
               ),
             ),
-            if (task.data['done'] != true && !model.taskFocus.visible)
-              IconButton(
-                tooltip: 'Start this task',
-                onPressed: () => action(
-                  context,
-                  () => model.taskFocus.start(
-                    title: task.data['title'] as String,
-                    taskId: task.id,
-                    minutes: (task.data['minutes'] as num?)?.toInt() ?? 25,
-                  ),
+            if (pendingWrites.contains(task.id))
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                icon: const Icon(Icons.play_circle_outline, size: 22),
               ),
             IconButton(
               tooltip: 'Discuss this to-do',
@@ -143,7 +157,7 @@ class TodoList extends StatelessWidget {
           ),
         ),
         caption(
-          'Tell Cortex the item and deadline. Ask in chat to change it or mark it done.',
+          'Tap a box to finish or reopen a to-do. Tell Cortex the item and deadline to add or change one.',
         ),
         const SizedBox(height: 12),
         sectionHead('Due today', trailing: Text('${today.length}')),
@@ -164,7 +178,7 @@ class TodoList extends StatelessWidget {
         if (olderDone.isNotEmpty)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            initiallyExpanded: true,
+            initiallyExpanded: false,
             title: Text('Other completed tasks · ${olderDone.length}'),
             children: [for (final task in olderDone) row(task)],
           ),

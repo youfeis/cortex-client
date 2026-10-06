@@ -77,29 +77,32 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     let id = defaults.string(forKey: "cortex.focus.selected")
     return visible.first { $0["id"] as? String == id } ?? visible.first
   }
+  // Checklist release: retain historical timers locally, but stop presenting or
+  // replaying them. AlarmKit and Health permissions use separate native bridges.
+  private var checklistOnly: Bool { true }
   func setup() {
     center.delegate = self
-    let postpone = UNTextInputNotificationAction(
-      identifier: "postpone", title: "Postpone", options: [], textInputButtonTitle: "Rearrange",
-      textInputPlaceholder: "Why? When would work better?")
-    center.setNotificationCategories([
-      UNNotificationCategory(
-        identifier: "CORTEX_FOCUS",
-        actions: [
-          UNNotificationAction(identifier: "complete", title: "Completed!", options: []),
-          UNNotificationAction(identifier: "extend", title: "+15 minutes", options: []), postpone,
-          UNNotificationAction(identifier: "pause", title: "Take a break", options: []),
-        ], intentIdentifiers: []),
-      UNNotificationCategory(
-        identifier: "CORTEX_FOCUS_READY",
-        actions: [
-          UNNotificationAction(identifier: "begin", title: "I’ve started", options: []), postpone,
-        ], intentIdentifiers: []),
-    ])
+    enqueue { await self.retireTaskCards() }
+  }
+  private func retireTaskCards() async {
+    restoration?.cancel()
+    restoreGeneration = UUID()
+    for watcher in liveWatchers.values { watcher.cancel() }
+    liveWatchers.removeAll()
+    if defaults.object(forKey: "cortex.focus.retiredEnvelope") == nil {
+      defaults.set(["tasks": tasks, "pending": pending], forKey: "cortex.focus.retiredEnvelope")
+    }
+    pending = []
+    tasks = []
+    defaults.removeObject(forKey: "cortex.focus.openRequest")
+    defaults.removeObject(forKey: "cortex.focus.previewRequest")
+    await clearNotifications()
     if #available(iOS 16.2, *) {
-      for activity in Activity<CortexTaskBoardAttributes>.activities
-      where Self.ongoing(activity.activityState) || Self.scheduled(activity.activityState) {
-        observe(activity)
+      for activity in Activity<CortexTaskBoardAttributes>.activities {
+        await activity.end(nil, dismissalPolicy: .immediate)
+      }
+      for activity in Activity<CortexFocusAttributes>.activities {
+        await activity.end(nil, dismissalPolicy: .immediate)
       }
     }
   }
@@ -111,6 +114,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     }
   }
   func restoreOnOpen() {
+    if checklistOnly { enqueue { await self.retireTaskCards() }; return }
     restoration?.cancel()
     let generation = UUID()
     restoreGeneration = generation
@@ -173,6 +177,13 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     }
   }
   func handle(_ method: String, _ args: [String: Any], _ result: @escaping FlutterResult) {
+    if checklistOnly {
+      enqueue {
+        await self.retireTaskCards()
+        result(["permission": "retired", "focuses": [], "pending": [], "focus": NSNull()])
+      }
+      return
+    }
     enqueue {
       do {
         switch method {
@@ -244,6 +255,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     }
   }
   func perform(id: String, revision: Int, action: String, minutes: Int) async throws {
+    guard !checklistOnly else { throw CortexNative.failure("Use the to-do and routine checklists in Cortex.") }
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       enqueue {
         do {
@@ -387,6 +399,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
     defaults.removeObject(forKey: "cortex.focus.through")
   }
   private func schedule() async throws {
+    if checklistOnly { await retireTaskCards(); return }
     let tracked = openTasks.filter {
       ["pending", "active", "ready"].contains($0["status"] as? String ?? "")
     }
@@ -643,6 +656,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
   }
 
   private func act(_ args: [String: Any]) async throws {
+    guard !checklistOnly else { throw CortexNative.failure("Use the checklists in Cortex.") }
     var list = tasks
     guard let id = args["id"] as? String,
       let index = list.firstIndex(where: { $0["id"] as? String == id }),
@@ -728,6 +742,7 @@ final class CortexFocus: NSObject, UNUserNotificationCenterDelegate {
   }
   func open(_ url: URL) -> Bool {
     guard url.scheme == "cortex", url.host == "focus" else { return false }
+    if checklistOnly { enqueue { await self.retireTaskCards() }; return true }
     let parts = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
     func value(_ key: String) -> String? { parts.first { $0.name == key }?.value }
     let action = value("action") ?? "view"

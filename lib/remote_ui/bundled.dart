@@ -2,7 +2,7 @@
 const bundledLayoutJSON = r'''
 {
   "schema": 1,
-  "revision": "2026-09-14.1",
+  "revision": "2026-10-06.1",
   "pages": {
     "space": {
       "type": "list",
@@ -66,7 +66,7 @@ const bundledLayoutJSON = r'''
           "children": [
             {
               "type": "text",
-              "text": "Tell Cortex what changed. Your chat updates these records, so you don\u2019t have to manage lots of forms.",
+              "text": "Health, to-dos and repeating routines. Check off completed work; tell Cortex what you want to add or change.",
               "size": 14
             }
           ]
@@ -129,15 +129,15 @@ const bundledLayoutJSON = r'''
         },
         {
           "type": "slot",
-          "name": "plan"
-        },
-        {
-          "type": "slot",
           "name": "todos"
         },
         {
           "type": "slot",
           "name": "routines"
+        },
+        {
+          "type": "slot",
+          "name": "plan"
         },
         {
           "type": "slot",

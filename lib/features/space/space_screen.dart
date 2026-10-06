@@ -19,8 +19,8 @@ class SpaceScreen extends StatelessWidget {
     slots: {
       'time': area(
         context,
-        'Time\nmanagement',
-        'A day with breathing room',
+        'To-dos &\nroutines',
+        'Check off, feel lighter',
         Icons.schedule_rounded,
         () => open(context, 'time'),
       ),

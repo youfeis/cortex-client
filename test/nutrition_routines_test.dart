@@ -162,7 +162,7 @@ void main() {
           .value,
       isTrue,
     );
-    await tester.tap(find.text('Other days'));
+    await tester.tap(find.text('Upcoming routines'));
     await tester.pumpAndSettle();
     expect(
       tester

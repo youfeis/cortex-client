@@ -1,4 +1,3 @@
-import '../features/time/task_focus.dart';
 import 'package:flutter/material.dart';
 import '../core/cortex.dart';
 import '../core/compression_notices.dart';
@@ -21,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int tab = 0;
   final chatKey = GlobalKey<ChatScreenState>();
   bool _showingMemory = false;
-  bool _showingTask = false;
   final _compressionNotices = CompressionNotices();
   String? _lastCompressionState;
   @override
@@ -74,28 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _memoryChanged() {
     _compressionChanged();
-    final request = widget.model.taskFocus.openRequest;
-    if (mounted &&
-        !_showingTask &&
-        widget.model.foreground &&
-        request != null) {
-      _showingTask = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final item = widget.model.taskFocus.visibleTasks
-            .where((f) => f['id'] == request['id'])
-            .firstOrNull;
-        await widget.model.taskFocus.acknowledgeOpen();
-        if (!mounted) return;
-        if (request['action'] == 'postpone' && item != null) {
-          await postponeFocus(context, widget.model, item);
-        } else {
-          await showFocusSheet(context, widget.model);
-        }
-        _showingTask = false;
-      });
-    }
-
     if (!mounted ||
         _showingMemory ||
         !widget.model.foreground ||
@@ -199,7 +175,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottom: false,
       child: Column(
         children: [
-          FocusPanel(model: widget.model, compact: true),
           Expanded(
             child: IndexedStack(
               index: tab,

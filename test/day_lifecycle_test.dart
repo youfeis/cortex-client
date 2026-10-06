@@ -18,45 +18,28 @@ class DayApi extends CortexApi {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'Wake check-in sends reported energy and local offset to chat planning',
-    (tester) async {
-      final api = DayApi();
-      final model = CortexModel(api: api);
-      bool? sent;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                onPressed: () async {
-                  sent = await showModalBottomSheet<bool>(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) => CheckIn(model: model),
-                  );
-                },
-                child: const Text('Wake up'),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('Wake up'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Low'));
-      await tester.tap(find.text('Arrange my day'));
-      await tester.pumpAndSettle();
-      expect(sent, true);
-      expect(api.writes, hasLength(1));
-      expect(api.writes.single['path'], '/v1/plan');
-      final data = api.writes.single['data'] as Map;
-      expect(data['energy'], 'low');
-      expect(data['timezoneOffset'], DateTime.now().timeZoneOffset.inMinutes);
-      expect(data['date'], day());
-      model.dispose();
-    },
-  );
+  testWidgets('Scheduling screen contains checklists without day planning', (
+    tester,
+  ) async {
+    final api = DayApi();
+    final model = CortexModel(api: api);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TimeScreen(model: model, onChat: (_, {photo = false}) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('To-dos & routines'), findsOneWidget);
+    expect(find.text('To-do list'), findsOneWidget);
+    expect(find.text('Arrange my day'), findsNothing);
+    expect(find.text('Planned for today'), findsNothing);
+    await tester.tap(find.text('Routines'));
+    await tester.pumpAndSettle();
+    expect(find.text('Repeating routines'), findsOneWidget);
+    expect(find.text('To-do list'), findsNothing);
+    expect(api.writes, isEmpty);
+    model.dispose();
+  });
 
   testWidgets(
     'Future calendar task has early Start and Done using APIs without chat',

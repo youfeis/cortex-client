@@ -4,7 +4,7 @@ An iPhone-first Flutter client for the private Cortex personal manager.
 
 Two tabs: **Chat** and **My space**. Chat is one continuous main conversation,
 with photos, steering, stop, context and quota usage, and in-app Codex login. My space
-shows fitness and time-management progress. Most record changes happen through
+shows health management, to-dos, repeating routines, and pets. Most record changes happen through
 chat. Money and personal targets are placeholders.
 
 ## Run
@@ -60,10 +60,9 @@ in settings. It refreshes at most once a minute automatically
 and on explicit refresh. Unavailable/expired usage never becomes a fictional
 100% balance. See [Codex account rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
 
-Time management separates Due today from other deadlines, with a collapsed completed list. Today follows the phone-local calendar date, including earlier timed deadlines today.
-Give Cortex a title and deadline in chat; changes and completion also happen in
-chat. A date-only deadline stays due through the day. If no duration is supplied,
-day planning uses a 25-minute estimate. My space uses accessible vector artwork
+To-dos separate Due today from other deadlines. Completed items stay visible; older completions are expandable. Today follows the phone-local calendar date, including earlier timed deadlines today.
+Give Cortex a title and deadline in chat; edits happen in
+chat, and completion also works by tapping a checkbox. A date-only deadline stays due through the day. My space uses accessible vector artwork
 for Time and Fitness; stubs remain plain.
 
 Meals can be logged from photos using researched, clearly marked estimates. Fitness data
@@ -228,106 +227,24 @@ Source captions explain why a box is checked. A checkbox correction overrides
 auto-matching for that date; tomorrow starts fresh. Off-day rotation checkboxes
 are disabled. Day-plan status uses the same routine completion state.
 
-## Task cards and check-ins
+## To-dos and repeating routines
 
-Planned for today lists every tracked timed calendar occurrence, including those outside the Live Activity window and completed items. Start early or mark Done there; existing occurrence IDs preserve the offline action queue. Earlier untracked events are materialized through the signed API only when acted on. Tell chat “I'm starting…” or tap Start on a to-do/calendar task. A current-task
-strip stays in both tabs and opens the full task controls. The task sheet uses
-a fixed Close button above the scrolling list, plus a drag handle;
-the same sheet opens from Live Activity links. Closing it leaves timers running.
-Completing a linked task completes its to-do. Pausing/postponing stops reminders without completing
-work; silence never marks a task done. Google Calendar changes require planning.
+Scheduling is a checklist. To-dos have direct completion/undo checkboxes; completed
+items stay stored and crossed out. Due today and Done today stay visible; older
+completions are expandable. Checkbox writes use `POST /v1/tasks/{id}/complete`,
+patching completion only, so a stale screen cannot overwrite a newer deadline.
 
-Overlapping tasks share one 160-point native Live Activity. Two columns show
-independent progress and 44-point-high buttons: Start/Done/Resume, the clock-arrow
-Postpone button, Pause and +5/+10/+15 minutes. Titles open task details. With
-more than two tasks, 44-point arrow buttons show the next or previous pair
-without opening Cortex; the left arrow shows the page count. Paging is saved
-locally and never edits timers, revisions or the action history. Task positions remain stable when the
-server returns its latest-edited task first. Both the in-app strip/details and
-Live Activity pages show tasks only from 30 minutes before their planned start,
-or after an explicit Start. Already-started paused/postponed tasks stay reachable
-with Resume; unstarted postponed work stays hidden until rescheduled.
+Repeating routines use the existing local-date occurrence records. Daily, weekly,
+biweekly and monthly cycles preserve their dates, medical rotation and history.
+Matching health measurements can check the same routines automatically; doses
+still require an explicit owner confirmation. Add or edit items through chat.
 
-Selected timed Google events and scheduled day-plan to-do blocks automatically
-create durable task occurrences. Planned tasks use pending → ready (30 minutes
-before scheduledStart) → active (explicit Start) → done (explicit completion),
-with paused/postponed/cancelled branches. Starting early is allowed. Rescheduling
-returns to pending/ready. Clock activation never changes the owner-action revision.
-
-On iOS 26, the phone queues standard ActivityKit cards using the scheduled-start
-API, which activates without a running Flutter app. Pending cards are reported as
-scheduled, never as currently visible. Nearby tasks share one board; groups span
-at most eight hours, with three queued boards. Each card carries the displayed
-pair only; its arrows load other tasks from native storage to stay below the
-4 KB payload limit. Later pending tasks stay in the scheduling cache and calendar,
-without appearing in the current-task list or adding Live Activity pages.
-iOS may accept fewer cards; per-task acknowledgement reports actual coverage.
-The first scheduled card's alert replaces the matching ordinary 30-minute alert.
-Opening Cortex refreshes the next 48 hours, replaces moved/deleted occurrences,
-and replenishes the bounded queue. Calendar changes made after the last phone
-sync need another sync; this release does not claim APNs delivery of new events.
-
-Completed to-dos remain visible and crossed out. Done today uses their persisted
-completion timestamp in the phone's local time. Older/undated completions are
-expanded separately; editing a completed task does not move its completion date.
-
-Reopening Cortex restores cached unfinished tasks before network access succeeds.
-Bounded local retries handle iOS scene activation delays. Activity lifecycle
-changes refresh the displayed status; expiry can renew while Cortex is open.
-Swiping away a card is respected until reopening or an explicit task update.
-Settings > Task check-ins shows availability and has Restore task card.
-Apple can end a Live Activity after eight hours; a continuously visible card
-cannot be guaranteed while the app remains closed. Tasks remain stored.
-
-Notification delegate completions run explicitly on the main actor. Tapping a
-reminder saves the action locally before completing the callback; server sync
-follows without holding iOS's completion open. This avoids the UIKit background
-state-restoration crash caused by the async delegate's completion thread.
-Retained ended cards are retired before requesting a replacement. The local
-`cortex.focus.diagnostic` preference records actual ActivityKit availability,
-active/scheduled card IDs, the last request error, and notification completion
-thread; it excludes task titles, chat messages and credentials.
-
-Button actions save locally before syncing with the signed API. App Intents try
-to sync directly; offline/locked-device failures remain queued for the next open.
-Revision checks reject stale actions. Start, Done, Pause, Resume, Cancel and extra time use APIs directly. Only a postponement with a reason is forwarded to chat. Extra time changes the working timer; other calendar times stay in place. Postpone opens a reason sheet;
-expanded reminder notifications also accept a typed/dictated reason.
-
-Reminders fire at the expected finish, after ten minutes, then every fifteen
-minutes (or chat-selected thirty), within the latest plan’s waking hours.
-Up to forty reminders total are pre-scheduled across tasks and refreshed on open,
-bounded to eight hours of check-ins. Notification/Focus permissions control alerts.
-Pausing, postponing or completing a task cancels only its reminders.
-
-Settings > Task check-ins > Preview overlapping task card provides two test timers
-when there are no real open tasks. The same flow is available at
-`cortex://focus?action=preview`. Preview timers are excluded from planning and stats.
-
-Native verification (idle simulator only):
-`flutter drive --driver=test_driver/integration_test.dart --target=integration_test/focus_test.dart -d SIMULATOR_ID`
-checks real notification delivery, one shared card, independent offline actions,
-stable task positions, started paused/postponed visibility, future-task filtering,
-foreground restoration and stale-action rejection. Synthetic tasks are removed.
-
-`integration_test/notification_test.dart` is a separate device UI regression test:
-run it with the same driver on a disposable simulator, allow notifications, wait
-for READY, send Cortex Home, expand its reminder, and tap Take a break. It checks
-that UIKit's background callback saves the pause without crashing, retains the
-card, and stops reminders. Bring Cortex back to finish the assertions/cleanup.
+Wake-up planning, automatic calendar-to-timer creation and task Live Activities
+are disabled. On upgrade, native startup saves a local copy of the old task queue,
+clears its reminders, and ends its cards without replaying pending actions.
+The historical timer implementation remains in source for recovery.
+Calendar linking/sync and AlarmKit remain in Settings and the chat tools.
 
 ## Pets
 
 My space → Pets shows separate Cookie and Wanwan weight charts with 30-day, 90-day and all-history filters. Every same-day reading is retained, values use three decimal places and show the selected reading’s notes in kg, and the axis leaves room for small changes. Use the chat links to record or correct a weight; pull down to refresh. The Pets page and My space entry use the existing database-backed remote layout contract with a bundled offline layout. Missing readings remain empty.
-
-## Calendar-backed day planning
-
-The wake-up check-in sends energy, wake/bedtime and the phone’s UTC offset to the
-main chat. Planning progress appears there. Google Calendar holds planned times;
-the server projects its latest cache into the day view. Overnight times display
-“+1 day”. “Adjust today’s plan” opens a chat request instead of rebuilding it.
-
-Start/Done resolve the exact calendar occurrence, including when a to-do has
-multiple blocks. Done updates the original saved to-do; it never saves a second
-plan or deletes completed work. Routine blocks use their stable routine ID.
-Falling behind does not move calendar times. Postpone and extra-time buttons
-carry the owner’s scheduling request and reason to chat.

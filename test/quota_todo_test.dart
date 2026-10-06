@@ -145,6 +145,8 @@ void main() {
       tester.widget<Text>(find.text('Did the laundry')).style?.decoration,
       TextDecoration.lineThrough,
     );
+    await tester.tap(find.textContaining('Other completed tasks ·'));
+    await tester.pumpAndSettle();
     expect(find.text('Old achievement'), findsOneWidget);
     expect(todoCompletedToday(m.entries.first, now), isTrue);
     expect(
